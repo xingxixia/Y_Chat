@@ -33,7 +33,7 @@ Expected behavior:
 
 Check:
 
-- First test `test_atri.logs.clean_log_line` and `redact_log_line` directly.
+- First test `y_chat.logs.clean_log_line` and `redact_log_line` directly.
 - Then test the FastAPI app through `TestClient`.
 - Then test the running `http://127.0.0.1:18080/logs/status` service.
 
@@ -43,9 +43,9 @@ has not reloaded the latest source. Restart with `scripts/stop_dev.ps1` and
 
 Do not assume `uvicorn reload=True` picked up every edit on Windows.
 
-PowerShell may display a valid UTF-8 character such as the Vite `➜` arrow as
-mojibake in command output. If the API appears garbled, inspect HTTP response
-bytes or Unicode codepoints before treating it as an application bug.
+PowerShell may display valid UTF-8 symbols from Vite logs as mojibake in command
+output. If the API appears garbled, inspect HTTP response bytes or Unicode
+codepoints before treating it as an application bug.
 
 ## Black or Blank Window
 
@@ -123,7 +123,9 @@ Check:
 - Port `18080`.
 - `GET /health`.
 - FastAPI process logs.
-- Conda environment is `Atri_2`.
+- Conda environment is selected by local setup. Scripts load
+  `runtime/dev.local.ps1` first, then `Y_CHAT_CONDA_ENV`, then default to
+  `y_chat`.
 
 ## Debug History Missing Events
 
@@ -228,10 +230,10 @@ Resolution:
 
 ## Workspace vs Python Environment
 
-`test1` is the project workspace.
+The repository root is the project workspace.
 
-`Atri_2` is only the conda Python environment for backend commands. Do not refer
-to it as the workspace.
+The conda environment is only the Python environment for backend commands. Do
+not refer to it as the workspace.
 
 ## WebSocket Fails
 

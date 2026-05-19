@@ -4,7 +4,7 @@ $Root = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
 $Ports = @(18080, 5173)
 $CurrentPid = $PID
 
-Write-Host "Stopping test atri dev shell..."
+Write-Host "Stopping Y_Chat dev shell..."
 Write-Host "Root: $Root"
 
 $processes = @(Get-CimInstance Win32_Process)
@@ -75,7 +75,7 @@ foreach ($id in @($targetIds) | Sort-Object -Descending) {
 }
 
 if ($stopped -eq 0) {
-    Write-Host "No test atri dev processes found."
+    Write-Host "No Y_Chat dev processes found."
 }
 else {
     Write-Host "Stopped $stopped process(es)."

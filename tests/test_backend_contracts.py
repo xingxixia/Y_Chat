@@ -2,9 +2,9 @@ from __future__ import annotations
 
 from fastapi.testclient import TestClient
 
-from test_atri.logs import clean_log_line, redact_log_line
-from test_atri.main import app
-from test_atri import reasoning
+from y_chat.logs import clean_log_line, redact_log_line
+from y_chat.main import app
+from y_chat import reasoning
 
 
 client = TestClient(app)
@@ -13,7 +13,7 @@ client = TestClient(app)
 def test_health() -> None:
     response = client.get("/health")
     assert response.status_code == 200
-    assert response.json() == {"status": "ok", "app": "test_atri"}
+    assert response.json() == {"status": "ok", "app": "y_chat"}
 
 
 def test_internal_event_command_flow() -> None:

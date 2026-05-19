@@ -1,9 +1,8 @@
-# test atri
+# Y_Chat
 
-`test atri` is a local intelligent desktop pet application rebuilt in this
-workspace. It is not a web deployment project. The current goal is a runnable
-development shell with an Electron desktop pet frontend and a Python FastAPI
-backend.
+`Y_Chat` is a local intelligent desktop pet application. It is not a web
+deployment project. The current goal is a runnable development shell with an
+Electron desktop pet frontend and a Python FastAPI backend.
 
 ## Current Stage
 
@@ -22,7 +21,7 @@ adapters are planned but intentionally not active in the first shell.
 ## Environment
 
 - Windows
-- conda environment: `Atri_2`
+- conda environment: set `Y_CHAT_CONDA_ENV` or use a compatible local env
 - backend port: `18080`
 - frontend dev port: `5173`
 
@@ -31,8 +30,8 @@ adapters are planned but intentionally not active in the first shell.
 Install dependencies after reviewing the dependency files:
 
 ```powershell
-cd E:\File\AIuseing\xai\test1
-conda activate Atri_2
+cd <repo>
+conda activate y_chat
 pip install -r backend\requirements.txt
 cd frontend
 npm install
@@ -41,16 +40,34 @@ npm install
 Start both processes:
 
 ```powershell
-cd E:\File\AIuseing\xai\test1
+cd <repo>
 .\scripts\start_dev.ps1
 ```
 
 Stop all development processes:
 
 ```powershell
-cd E:\File\AIuseing\xai\test1
+cd <repo>
 .\scripts\stop_dev.ps1
 ```
+
+## Local Config
+
+`runtime/config.yaml` is local-only and ignored by git because it may later hold
+API keys, local paths, or private pet codenames. Start from
+`runtime/config.example.yaml` when setting up a new checkout.
+
+Optional machine-specific development overrides can be placed in
+`runtime/dev.local.ps1`, starting from `runtime/dev.local.example.ps1`.
+
+The public repository name is `Y_Chat`. A private local runtime may still use a
+separate pet codename, but that name stays in ignored local config.
+
+## License
+
+Code is licensed under Apache-2.0. Branding, character names, character
+likenesses, sprites, icons, voice designs, screenshots, and other creative
+assets are not granted by the code license; see `BRANDING.md`.
 
 ## Documentation
 

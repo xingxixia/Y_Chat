@@ -25,7 +25,7 @@ from .reasoning import (
 )
 
 
-app = FastAPI(title="test atri backend", version="0.1.0")
+app = FastAPI(title="Y_Chat backend", version="0.1.0")
 
 app.add_middleware(
     CORSMiddleware,
@@ -43,7 +43,7 @@ class MemoryCreateRequest(BaseModel):
 
 @app.get("/health")
 async def health() -> dict[str, str]:
-    return {"status": "ok", "app": "test_atri"}
+    return {"status": "ok", "app": "y_chat"}
 
 
 @app.get("/model/provider/status")
@@ -162,7 +162,7 @@ async def internal_ws(websocket: WebSocket) -> None:
     hello = make_event(
         "system.hello",
         "backend",
-        {"message": "test atri backend connected"},
+        {"message": "Y_Chat backend connected"},
     )
     await websocket.send_json(hello.model_dump())
 

@@ -4,7 +4,7 @@ import "./styles.css";
 
 declare global {
   interface Window {
-    testAtri?: {
+    yChat?: {
       showBubble: (text: string) => Promise<void>;
       hideBubble: () => Promise<void>;
       submitCommand: (text: string) => Promise<CommandSubmitResult>;
@@ -325,15 +325,15 @@ function PetCanvas({ petState }: { petState: string }) {
   function setMouseIgnored(ignored: boolean) {
     if (mouseIgnoredRef.current === ignored) return;
     mouseIgnoredRef.current = ignored;
-    window.testAtri?.setPetMouseIgnored(ignored);
+    window.yChat?.setPetMouseIgnored(ignored);
   }
 
   function endDrag(clientX?: number, clientY?: number) {
     if (dragRef.current.active && !dragRef.current.moved) {
-      window.testAtri?.notifyPetClicked();
+      window.yChat?.notifyPetClicked();
     }
     dragRef.current.active = false;
-    window.testAtri?.endPetWindowDrag();
+    window.yChat?.endPetWindowDrag();
 
     if (clientX === undefined || clientY === undefined) {
       setMouseIgnored(true);
@@ -479,7 +479,7 @@ function PetCanvas({ petState }: { petState: string }) {
           const totalDy = event.screenY - dragRef.current.startY;
           dragRef.current.moved =
             dragRef.current.moved || Math.abs(totalDx) + Math.abs(totalDy) > 2;
-          window.testAtri?.dragPetWindow();
+          window.yChat?.dragPetWindow();
           return;
         }
 
@@ -501,7 +501,7 @@ function PetCanvas({ petState }: { petState: string }) {
           startX: event.screenX,
           startY: event.screenY
         };
-        window.testAtri?.beginPetWindowDrag();
+        window.yChat?.beginPetWindowDrag();
         setMouseIgnored(false);
       }}
       onPointerUp={(event) => {
@@ -522,7 +522,7 @@ function BubbleOverlay() {
   const interruptRef = useRef(0);
 
   useEffect(() => {
-    const offText = window.testAtri?.onBubbleText((nextText) => {
+    const offText = window.yChat?.onBubbleText((nextText) => {
       const nextSegments = segmentBubbleText(nextText);
       interruptRef.current += 1;
       setSegments(nextSegments);
@@ -530,7 +530,7 @@ function BubbleOverlay() {
       setVisibleText("");
       setRunId((value) => value + 1);
     });
-    const offInterrupt = window.testAtri?.onBubbleInterrupt(() => {
+    const offInterrupt = window.yChat?.onBubbleInterrupt(() => {
       interruptRef.current += 1;
       setSegments([]);
       setSegmentIndex(0);
@@ -575,7 +575,7 @@ function BubbleOverlay() {
   return (
     <div className="pet-bubble-layer" aria-live="polite">
       <div className="pixel-bubble">
-        <div className="bubble-title">test atri</div>
+        <div className="bubble-title">Y_Chat</div>
         <div className="bubble-text">{visibleText}</div>
       </div>
     </div>
@@ -586,11 +586,11 @@ function PetWindow() {
   const [petState, setPetState] = useState("idle");
 
   useEffect(() => {
-    window.testAtri?.setPetMouseIgnored(true);
-    const offPetState = window.testAtri?.onPetState((state) => setPetState(state));
+    window.yChat?.setPetMouseIgnored(true);
+    const offPetState = window.yChat?.onPetState((state) => setPetState(state));
     return () => {
       offPetState?.();
-      window.testAtri?.setPetMouseIgnored(true);
+      window.yChat?.setPetMouseIgnored(true);
     };
   }, []);
 
@@ -598,7 +598,7 @@ function PetWindow() {
     <main className="pet-window">
       <div className="pet-state-badge">{petState}</div>
       <BubbleOverlay />
-      <div className="pet-hit-area" title="test atri">
+      <div className="pet-hit-area" title="Y_Chat">
         <PetCanvas petState={petState} />
       </div>
     </main>
@@ -612,7 +612,7 @@ function CommandWindow() {
   const [statusText, setStatusText] = useState("");
 
   useEffect(() => {
-    const offFocus = window.testAtri?.onCommandFocus(() => {
+    const offFocus = window.yChat?.onCommandFocus(() => {
       window.setTimeout(() => inputRef.current?.focus(), 0);
     });
     window.setTimeout(() => inputRef.current?.focus(), 0);
@@ -631,7 +631,7 @@ function CommandWindow() {
           setIsSubmitting(true);
           setStatusText("Sending...");
           try {
-            const result = await window.testAtri?.submitCommand(text);
+            const result = await window.yChat?.submitCommand(text);
             if (result?.ok) {
               setValue("");
               setStatusText("");
@@ -660,11 +660,11 @@ function CommandWindow() {
               if (isSubmitting) return;
               setValue("");
               setStatusText("");
-              window.testAtri?.hideCommand();
+              window.yChat?.hideCommand();
             }
           }}
           aria-label="Command"
-          placeholder="Type to test atri..."
+          placeholder="Type to Y_Chat..."
         />
         {statusText ? <span className="command-status">{statusText}</span> : null}
         {value && !isSubmitting ? (
@@ -730,8 +730,8 @@ function DebugWindow() {
   );
 
   useEffect(() => {
-    const offState = window.testAtri?.onDebugState((state) => setPetState(state));
-    const offEvents = window.testAtri?.onDebugEvents((nextEvents) => setEvents(nextEvents));
+    const offState = window.yChat?.onDebugState((state) => setPetState(state));
+    const offEvents = window.yChat?.onDebugEvents((nextEvents) => setEvents(nextEvents));
     return () => {
       offState?.();
       offEvents?.();
@@ -740,7 +740,7 @@ function DebugWindow() {
 
   useEffect(() => {
     let cancelled = false;
-    window.testAtri?.getEventHistoryStatus()
+    window.yChat?.getEventHistoryStatus()
       .then((status) => {
         if (!cancelled) setEventHistoryStatus(status);
       })
@@ -1330,7 +1330,7 @@ function DebugWindow() {
   return (
     <main className="debug-window">
       <aside className="debug-sidebar">
-        <h1>test atri</h1>
+        <h1>Y_Chat</h1>
         {navItems.map((item) => (
           <button
             key={item}

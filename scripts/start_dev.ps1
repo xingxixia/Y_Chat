@@ -4,6 +4,10 @@ $Root = Resolve-Path (Join-Path $PSScriptRoot "..")
 $BackendDir = Join-Path $Root "backend"
 $FrontendDir = Join-Path $Root "frontend"
 $LogDir = Join-Path $Root "runtime\logs"
+$LocalDevConfig = Join-Path $Root "runtime\dev.local.ps1"
+if (Test-Path $LocalDevConfig) {
+    . $LocalDevConfig
+}
 New-Item -ItemType Directory -Force -Path $LogDir | Out-Null
 
 $backendOutLog = Join-Path $LogDir "backend-dev.out.log"
@@ -12,12 +16,14 @@ $viteOutLog = Join-Path $LogDir "frontend-vite.out.log"
 $viteErrLog = Join-Path $LogDir "frontend-vite.err.log"
 $electronOutLog = Join-Path $LogDir "electron.out.log"
 $electronErrLog = Join-Path $LogDir "electron.err.log"
+$CondaEnv = if ($env:Y_CHAT_CONDA_ENV) { $env:Y_CHAT_CONDA_ENV } else { "y_chat" }
 
-Write-Host "Starting test atri dev shell..."
+Write-Host "Starting Y_Chat dev shell..."
 Write-Host "Root: $Root"
+Write-Host "Conda env: $CondaEnv"
 
 $backend = Start-Process -FilePath "conda" `
-    -ArgumentList @("run", "-n", "Atri_2", "python", "run_backend.py") `
+    -ArgumentList @("run", "-n", $CondaEnv, "python", "run_backend.py") `
     -WorkingDirectory $BackendDir `
     -RedirectStandardOutput $backendOutLog `
     -RedirectStandardError $backendErrLog `

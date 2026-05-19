@@ -2,13 +2,19 @@
 
 ## Locked Decisions
 
-- Develop only in `E:\File\AIuseing\xai\test1`.
+- Develop in the repository root.
 - `ZcChat2` and `Open-LLM-VTuber` are references only.
-- Clear the old tiny LM experiment and rebuild `test1` as the desktop pet app.
-- User-visible codename: `test atri`.
-- Machine name: `test_atri`.
+- Clear the previous tiny LM experiment and rebuild this repository as the
+  desktop pet app.
+- Public repository name: `Y_Chat`.
+- Public machine name default: `y_chat`.
+- Local private runtime config may keep a separate pet codename such as
+  a private local name; do not treat that private codename as the public GitHub
+  project name.
 - Use Electron + Vite + React + Canvas frontend.
-- Use Python FastAPI backend in conda environment `Atri_2`.
+- Use Python FastAPI backend. Scripts read `runtime/dev.local.ps1` first,
+  then `Y_CHAT_CONDA_ENV`, then fall back to a neutral `y_chat` environment
+  name for public setup.
 - Use backend port `18080`; Vite port `5173`.
 - Use PowerShell for one-command development startup.
 - Use a multimodal event bus, not a language-only chat pipeline.

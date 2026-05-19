@@ -6,6 +6,8 @@ frontend/dist/
 frontend/.vite/
 
 runtime/app.db
+runtime/config.yaml
+runtime/dev.local.ps1
 runtime/*.sqlite3
 runtime/*.jsonl
 runtime/logs/*

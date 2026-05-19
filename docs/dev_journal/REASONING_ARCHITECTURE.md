@@ -1,6 +1,6 @@
 # Always-On Reasoning Architecture
 
-This document is the source of truth for `test atri`'s reasoning loop, model
+This document is the source of truth for `Y_Chat`'s reasoning loop, model
 output contract, action execution policy, and reasoning audit behavior.
 
 It complements `MEMORY_ARCHITECTURE.md`. The memory document defines what is
@@ -9,7 +9,7 @@ turned into context, reasoning, actions, replies, and memory write candidates.
 
 ## Summary
 
-`test atri` is always in reasoning mode. There is no direct non-reasoning reply
+`Y_Chat` is always in reasoning mode. There is no direct non-reasoning reply
 path. Every user input, model click, visual observation, voice input, project
 event, system event, action result, or memory event enters the same reasoning
 loop:
@@ -155,7 +155,7 @@ attention.
 
 ## Run State Machine And Concurrency
 
-`test atri` uses a single-foreground reasoning queue.
+`Y_Chat` uses a single-foreground reasoning queue.
 
 Rules:
 
@@ -740,7 +740,7 @@ pause, or failure feedback.
 Primary runtime database:
 
 ```text
-runtime/test_atri.sqlite3
+runtime/<app.machine_name>.sqlite3
 ```
 
 Planned reasoning tables:

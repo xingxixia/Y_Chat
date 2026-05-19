@@ -7,10 +7,11 @@ from pathlib import Path
 from typing import Any
 from uuid import uuid4
 
-from .config import RUNTIME_DIR, load_config
+from .config import RUNTIME_DIR, load_config, runtime_sqlite_path
 
 
-DB_PATH = RUNTIME_DIR / "test_atri.sqlite3"
+def db_path() -> Path:
+    return runtime_sqlite_path()
 
 
 def memory_enabled() -> bool:
@@ -20,7 +21,7 @@ def memory_enabled() -> bool:
 
 def ensure_memory_db() -> None:
     RUNTIME_DIR.mkdir(parents=True, exist_ok=True)
-    with sqlite3.connect(DB_PATH) as db:
+    with sqlite3.connect(db_path()) as db:
         db.execute(
             """
             CREATE TABLE IF NOT EXISTS memory_items (
@@ -62,7 +63,7 @@ def ensure_memory_db() -> None:
 
 def list_memory_items() -> list[dict[str, Any]]:
     ensure_memory_db()
-    with sqlite3.connect(DB_PATH) as db:
+    with sqlite3.connect(db_path()) as db:
         db.row_factory = sqlite3.Row
         rows = db.execute(
             """
@@ -77,7 +78,7 @@ def list_memory_items() -> list[dict[str, Any]]:
 
 def memory_status_payload() -> dict[str, Any]:
     ensure_memory_db()
-    with sqlite3.connect(DB_PATH) as db:
+    with sqlite3.connect(db_path()) as db:
         db.row_factory = sqlite3.Row
         manual_count = db.execute("SELECT COUNT(*) AS count FROM memory_items").fetchone()["count"]
         record_count = db.execute("SELECT COUNT(*) AS count FROM memory_records").fetchone()["count"]
@@ -97,7 +98,7 @@ def memory_status_payload() -> dict[str, Any]:
 def list_memory_records(limit: int = 100) -> list[dict[str, Any]]:
     ensure_memory_db()
     safe_limit = max(1, min(limit, 200))
-    with sqlite3.connect(DB_PATH) as db:
+    with sqlite3.connect(db_path()) as db:
         db.row_factory = sqlite3.Row
         rows = db.execute(
             """
@@ -132,7 +133,7 @@ def add_memory_item(kind: str, text: str) -> dict[str, Any]:
         "text": text,
         "created_at": datetime.now(timezone.utc).isoformat(),
     }
-    with sqlite3.connect(DB_PATH) as db:
+    with sqlite3.connect(db_path()) as db:
         db.execute(
             """
             INSERT INTO memory_items (id, kind, text, created_at)
@@ -145,6 +146,6 @@ def add_memory_item(kind: str, text: str) -> dict[str, Any]:
 
 def delete_memory_item(item_id: str) -> bool:
     ensure_memory_db()
-    with sqlite3.connect(DB_PATH) as db:
+    with sqlite3.connect(db_path()) as db:
         cursor = db.execute("DELETE FROM memory_items WHERE id = ?", (item_id,))
     return cursor.rowcount > 0

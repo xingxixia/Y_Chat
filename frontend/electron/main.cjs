@@ -375,7 +375,7 @@ app.whenReady().then(() => {
   createPetWindow();
   createCommandWindow();
   createDebugWindow();
-  rememberEvent(makeEvent("system.hello", "electron", { app: "test_atri" }));
+  rememberEvent(makeEvent("system.hello", "electron", { app: "y_chat" }));
 
   globalShortcut.register("CommandOrControl+Space", showCommandWindow);
 

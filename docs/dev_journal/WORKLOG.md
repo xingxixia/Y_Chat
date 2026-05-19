@@ -3,7 +3,7 @@
 ## 2026-05-18
 
 - Confirmed implementation plan from conversation.
-- Cleared old tiny LM experiment contents from `E:\File\AIuseing\xai\test1`.
+- Cleared old tiny LM experiment contents from the repository workspace.
 - Created new root directories:
   - `frontend/`
   - `backend/`
@@ -24,8 +24,8 @@
   - settings/debug window
   - Canvas pixel pet placeholder
 - Added PowerShell dev launcher and backend check script.
-- Checked backend dependencies in `Atri_2`: `fastapi`, `uvicorn`, `yaml`, and
-  `pydantic` import successfully.
+- Checked backend dependencies in the configured backend environment:
+  `fastapi`, `uvicorn`, `yaml`, and `pydantic` import successfully.
 - Checked frontend dependencies: `frontend/node_modules` is missing, so Vite and
   Electron cannot run until `npm install` is performed.
 - Ran `npm install` in `frontend/` with approval. It timed out after about 304
@@ -35,9 +35,8 @@
 - Attempted to inspect running `npm/node/electron` processes in parallel, but
   one shell call failed due to Windows sandbox setup refresh failure. This still
   needs to be checked on resume.
-- Important correction from user: `test1` is the current workspace/project;
-  `Atri_2` is only the Python conda environment previously used for backend
-  checks, not the workspace name.
+- Important correction from user: the repository workspace/project is separate
+  from the Python conda environment used for backend checks.
 - Resumed from docs and checked lingering processes. Found stuck `npm install`
   and Electron `install.js` processes from the previous timeout, then stopped
   only those project installer processes.
@@ -174,24 +173,24 @@
 - Debug window now displays backend status, current pet state, and recent event
   payloads.
 - Continued with the Model Provider thin slice without enabling real AI calls.
-- Added `backend/test_atri/model_provider.py` for provider config/status.
+- Added `backend/y_chat/model_provider.py` for provider config/status.
 - Added `GET /model/provider/status`.
 - Added `llm.enabled: false` and `permissions.model.call: false` as explicit
   gates in `runtime/config.yaml`.
 - Continued with the Memory Manager thin slice without connecting automatic
   memory writes.
-- Added `backend/test_atri/memory.py` with SQLite-backed manual memory items in
-  `runtime/test_atri.sqlite3`.
+- Added `backend/y_chat/memory.py` with SQLite-backed manual memory items in
+  `runtime/y_chat.sqlite3`.
 - Added `GET /memory`, `POST /memory`, and `DELETE /memory/{item_id}`.
 - Continued with the Project Reader thin slice.
-- Added `backend/test_atri/project_reader.py`.
+- Added `backend/y_chat/project_reader.py`.
 - Added `GET /project-reader/status` and gated `GET /project-reader/files`.
 - Added `project_reader.allowed_roots: []` while keeping
   `permissions.project.read: false` by default.
 - Added backend contract smoke tests in `tests/test_backend_contracts.py` for
   health, command event flow, disabled model provider status, and default
   project-reader denial.
-- `pytest` is not installed in `Atri_2`, so added standalone
+- `pytest` is not installed in the configured backend environment, so added standalone
   `tests/smoke_backend_contracts.py` to run the same contract checks without
   installing dependencies.
 - User reported the debug window opens once, then reopening after closing shows
@@ -215,7 +214,7 @@
   bubble text area to two lines.
 - Continued with a Permission Manager thin slice while external/voice/screen/VR
   remain blocked until explicit selection.
-- Added `backend/test_atri/permissions.py` and `GET /permissions/status`.
+- Added `backend/y_chat/permissions.py` and `GET /permissions/status`.
 - Added a read-only permission list to the debug window.
 - Extended the backend smoke contract check to verify permission status.
 - Added a read-only Debug Window Modules section showing Model Provider,
@@ -267,7 +266,7 @@
   - Ran backend import check, Electron main/preload syntax checks, frontend
     typecheck, backend smoke contracts, backend health check, Vite HTTP check,
     and error-log size check successfully.
-  - Confirmed `test1` is not currently a git repository, so `git status` is not
+  - Confirmed the workspace was not currently a git repository, so `git status` is not
     available.
 - User confirmed the current dialogue bubble is acceptable for now and asked to
   leave it alone until they explicitly request another pass. Updated the module
@@ -492,7 +491,7 @@
   key input or real provider calls are enabled.
 - Downgraded Chroma/vector wording in architecture to a future placeholder, not
   current implementation.
-- Initialized local git in `test1` and committed the current project state as
+- Initialized local git in the workspace and committed the current project state as
   `baseline before doc gap fixes` before making further documentation edits.
 - Completed a documentation gap review for the accepted reasoning route without
   changing code or the accepted memory architecture.
@@ -575,11 +574,28 @@
 - Added read-only Debug History status via Electron IPC: file path, byte size,
   persisted line count, configured history limits, loaded event count, and
   recent event types are visible without adding any clear/delete/write action.
-- Investigated apparent Vite arrow mojibake in `/logs/status`. Direct HTTP byte
-  and Unicode-codepoint checks showed the API returns valid UTF-8 `➜`; the
-  visible mojibake was from PowerShell display decoding, so
-  `TROUBLESHOOTING.md` now records that check.
+- Investigated apparent Vite symbol mojibake in `/logs/status`. Direct HTTP byte
+  and Unicode-codepoint checks showed the API returned valid UTF-8; the visible
+  mojibake was from PowerShell display decoding, so `TROUBLESHOOTING.md` now
+  records that check.
 - Added the formal Memory table shell: `memory_records` and `memory_audit_log`
   are created in SQLite, `/memory/status` and `/memory/records` expose read-only
   readiness/record data, and Debug Memory shows formal records while automatic
   writes remain disabled.
+- Renamed the public project surface to `Y_Chat` for GitHub preparation:
+  README, docs, frontend title/package name, backend package, health response,
+  scripts, and tests now use `Y_Chat` / `y_chat`.
+- Kept private local runtime naming separate from the public project name:
+  `runtime/config.yaml` is ignored by git and may keep a private local pet
+  codename; `runtime/config.example.yaml` is the public committed template.
+- Added Apache-2.0 `LICENSE` for code and `BRANDING.md` to clarify that
+  branding, character names, likenesses, sprites, icons, voice designs,
+  screenshots, and other creative assets are not granted by the code license.
+- Moved runtime SQLite selection behind `app.machine_name`, so the public
+  example uses `runtime/y_chat.sqlite3` while a private local config can keep a
+  private SQLite filename.
+- Added ignored `runtime/dev.local.ps1` support for machine-specific development
+  settings such as a private conda environment name. Public scripts now fall
+  back to `y_chat` instead of exposing a local-only environment as the default.
+- Added `.editorconfig` to keep committed text files UTF-8 and reduce future
+  BOM/line-ending drift.

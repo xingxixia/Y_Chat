@@ -2,7 +2,7 @@
 
 ## Product Goal
 
-`test atri` is a local intelligent desktop pet. It is not a web deployment. It
+`Y_Chat` is a local intelligent desktop pet. It is not a web deployment. It
 should feel like a desktop presence with a pixel-game pet body, speech bubbles,
 memory, debugging visibility, and future support for voice, screen perception,
 VR, and external software integration.
@@ -10,9 +10,13 @@ VR, and external software integration.
 ## Locked Technical Stack
 
 - Frontend: Electron + Vite + React + Canvas.
-- Backend: Python FastAPI running in conda environment `Atri_2`.
+- Backend: Python FastAPI running in the configured conda environment
+  (`runtime/dev.local.ps1`, `Y_CHAT_CONDA_ENV`, or public fallback `y_chat`).
 - Runtime data: `runtime/`.
 - Config: YAML for editable configuration, SQLite for runtime state.
+- Public setup config: `runtime/config.example.yaml`.
+- Local private config: ignored `runtime/config.yaml`.
+- Runtime SQLite filename follows `app.machine_name` from local config.
 - Vector memory interface: future Chroma-compatible placeholder, not current
   implementation.
 - Communication: HTTP + WebSocket.

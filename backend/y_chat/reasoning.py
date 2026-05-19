@@ -6,11 +6,10 @@ from datetime import datetime, timezone
 from typing import Any
 from uuid import uuid4
 
-from .config import RUNTIME_DIR, load_config
+from .config import RUNTIME_DIR, load_config, runtime_sqlite_path
 from .events import EventEnvelope, make_event
 
 
-DB_PATH = RUNTIME_DIR / "test_atri.sqlite3"
 PROVIDER_NAME = "deterministic_fallback"
 SCHEMA_VERSION = "reasoning.v1"
 HIGH_RISK_ACTIONS = {
@@ -64,7 +63,7 @@ def configured_permissions() -> dict[str, bool]:
 
 def ensure_reasoning_db() -> None:
     RUNTIME_DIR.mkdir(parents=True, exist_ok=True)
-    with sqlite3.connect(DB_PATH) as db:
+    with sqlite3.connect(runtime_sqlite_path()) as db:
         db.execute(
             """
             CREATE TABLE IF NOT EXISTS reasoning_runs (
@@ -180,7 +179,7 @@ def ensure_reasoning_db() -> None:
 
 def _connect() -> sqlite3.Connection:
     ensure_reasoning_db()
-    db = sqlite3.connect(DB_PATH)
+    db = sqlite3.connect(runtime_sqlite_path())
     db.row_factory = sqlite3.Row
     return db
 

@@ -21,6 +21,16 @@ def load_config() -> dict[str, Any]:
     return data
 
 
+def app_machine_name() -> str:
+    config = load_config()
+    raw_name = str(config.get("app", {}).get("machine_name", "y_chat")).strip()
+    return raw_name or "y_chat"
+
+
+def runtime_sqlite_path() -> Path:
+    return RUNTIME_DIR / f"{app_machine_name()}.sqlite3"
+
+
 def backend_host() -> str:
     config = load_config()
     return str(config.get("backend", {}).get("host", "127.0.0.1"))

@@ -1,6 +1,6 @@
 # Development Journal
 
-This directory is the source of truth for recovering the `test atri` project
+This directory is the source of truth for recovering the `Y_Chat` project
 after context compaction, interruption, or a long pause.
 
 Read order:

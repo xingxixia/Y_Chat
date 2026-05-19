@@ -1,6 +1,6 @@
 # Unified Multimodal Memory Architecture
 
-This document is the source of truth for `test atri`'s memory design.
+This document is the source of truth for `Y_Chat`'s memory design.
 
 The memory system uses one continuous multimodal memory architecture. Text,
 vision, audio, events, pet state, and project context all enter the same memory
@@ -428,7 +428,7 @@ Actions:
 Main database:
 
 ```text
-runtime/test_atri.sqlite3
+runtime/<app.machine_name>.sqlite3
 ```
 
 Future tables:

@@ -11,9 +11,9 @@ ROOT = Path(__file__).resolve().parents[1]
 BACKEND = ROOT / "backend"
 sys.path.insert(0, str(BACKEND))
 
-from test_atri.main import app  # noqa: E402
-from test_atri.logs import LOG_DIR  # noqa: E402
-from test_atri import reasoning  # noqa: E402
+from y_chat.main import app  # noqa: E402
+from y_chat.logs import LOG_DIR  # noqa: E402
+from y_chat import reasoning  # noqa: E402
 
 
 def assert_equal(actual: object, expected: object, label: str) -> None:
@@ -26,7 +26,7 @@ def main() -> None:
 
     health = client.get("/health")
     assert_equal(health.status_code, 200, "health status")
-    assert_equal(health.json(), {"status": "ok", "app": "test_atri"}, "health body")
+    assert_equal(health.json(), {"status": "ok", "app": "y_chat"}, "health body")
 
     event_response = client.post(
         "/events/internal",
@@ -85,7 +85,7 @@ def main() -> None:
         output["reply"] = {"should_reply": True}
         return output
 
-    with patch("test_atri.reasoning.build_deterministic_output", build_invalid_output):
+    with patch("y_chat.reasoning.build_deterministic_output", build_invalid_output):
         failure_response = client.post(
             "/events/internal",
             json={
@@ -121,7 +121,7 @@ def main() -> None:
         output.pop("memory")
         return output
 
-    with patch("test_atri.reasoning.build_deterministic_output", build_repairable_output):
+    with patch("y_chat.reasoning.build_deterministic_output", build_repairable_output):
         repair_response = client.post(
             "/events/internal",
             json={
@@ -159,7 +159,7 @@ def main() -> None:
         ]
         return output
 
-    with patch("test_atri.reasoning.build_deterministic_output", build_action_output):
+    with patch("y_chat.reasoning.build_deterministic_output", build_action_output):
         action_response = client.post(
             "/events/internal",
             json={

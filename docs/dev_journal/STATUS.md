@@ -2,14 +2,15 @@
 
 ## Current State
 
-The old `test1` tiny LM learning experiment has been cleared. The repository is
-being rebuilt as the `test atri` intelligent desktop pet application.
+The previous tiny LM learning experiment has been cleared. The repository is
+being rebuilt as the `Y_Chat` intelligent desktop pet application.
 
 Created so far:
 
 - Root `README.md`
 - Root `.gitignore`
-- `runtime/config.yaml`
+- `runtime/config.example.yaml`
+- Local ignored `runtime/config.yaml`
 - `runtime/logs/`
 - `runtime/cache/`
 - `runtime/vector_store/`
@@ -30,6 +31,18 @@ Created so far:
   - `scripts/start_dev.ps1`
   - `scripts/stop_dev.ps1`
   - `scripts/check_backend.ps1`
+
+GitHub preparation status:
+
+- Public project name is `Y_Chat`.
+- Code license is Apache-2.0.
+- Branding and character assets are documented separately in `BRANDING.md` and
+  are not granted by the code license.
+- `runtime/config.yaml` is local-only and ignored by git.
+- `runtime/config.example.yaml` is the committed public setup template.
+- The backend package is `y_chat`; local runtime data uses the configured
+  `app.machine_name` for its SQLite filename, so private local names can remain
+  local.
 
 ## Current Stage
 
@@ -188,7 +201,7 @@ Resolved on 2026-05-18:
   `npm.cmd` startup.
 - Backend, Vite, and Electron start successfully from the launcher.
 - `scripts/stop_dev.ps1` stops the dev processes and frees the ports.
-- `GET /health` returns `{"status":"ok","app":"test_atri"}`.
+- `GET /health` returns `{"status":"ok","app":"y_chat"}`.
 - Event Bus thin slice is connected: command submission posts
   `user.command.submitted` to `POST /events/internal`, and the backend routes it
   through Reasoning R1's deterministic fallback executor before emitting a
@@ -287,7 +300,8 @@ Resolved on 2026-05-18:
 - Backend contract smoke checks cover health, command event flow, disabled model
   provider status, permission status, memory listing, and default-blocked
   project reader access.
-  Use `python tests/smoke_backend_contracts.py` in the `Atri_2` environment;
+  Use `python tests/smoke_backend_contracts.py` in the configured backend
+  environment;
   `pytest` is not currently installed.
 
 ## Resume Checklist After Context Compaction

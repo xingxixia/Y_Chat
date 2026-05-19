@@ -1,6 +1,6 @@
 const { contextBridge, ipcRenderer } = require("electron");
 
-contextBridge.exposeInMainWorld("testAtri", {
+contextBridge.exposeInMainWorld("yChat", {
   showBubble: (text) => ipcRenderer.invoke("pet:show-bubble", text),
   hideBubble: () => ipcRenderer.invoke("bubble:hide"),
   submitCommand: (text) => ipcRenderer.invoke("command:submit", text),

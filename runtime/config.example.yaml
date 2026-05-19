@@ -1,6 +1,6 @@
 app:
-  name: test atri
-  machine_name: test_atri
+  name: Y_Chat
+  machine_name: y_chat
 
 backend:
   host: 127.0.0.1

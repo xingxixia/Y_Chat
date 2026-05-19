@@ -385,7 +385,7 @@ Accepted architecture:
 
 Current thin slice:
 
-- SQLite-backed `memory_items` table in `runtime/test_atri.sqlite3`.
+- SQLite-backed `memory_items` table in `runtime/<app.machine_name>.sqlite3`.
 - `GET /memory`, `POST /memory`, and `DELETE /memory/{item_id}`.
 - Formal memory table shell is present: `memory_records` and
   `memory_audit_log` exist for future automatic writes.

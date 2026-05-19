@@ -13,7 +13,7 @@ Expected response:
 ```json
 {
   "status": "ok",
-  "app": "test_atri"
+  "app": "y_chat"
 }
 ```
 
