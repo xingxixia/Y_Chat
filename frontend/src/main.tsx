@@ -51,6 +51,26 @@ type ModelProviderStatus = {
   configured: boolean;
 };
 
+type ModelProviderConfig = {
+  enabled_requested: boolean;
+  permission_allowed: boolean;
+  effective_enabled: boolean;
+  active_provider: string;
+  real_model_calls: boolean;
+  read_only: boolean;
+  providers: Record<
+    string,
+    {
+      base_url: string;
+      model: string;
+      temperature: number | null;
+      stream: boolean;
+      api_key_configured: boolean;
+      api_key_masked: string;
+    }
+  >;
+};
+
 type MemoryStatus = {
   enabled: boolean;
   items: Array<{ id: string; kind: string; text: string; created_at: string }>;
@@ -629,6 +649,7 @@ function DebugWindow() {
   const backendStatus = useBackendStatus(refreshKey);
   const permissionStatus = usePermissionStatus(refreshKey);
   const modelStatus = useJsonStatus<ModelProviderStatus>("/model/provider/status", refreshKey);
+  const modelConfig = useJsonStatus<ModelProviderConfig>("/model/provider/config", refreshKey);
   const memoryStatus = useJsonStatus<MemoryStatus>("/memory", refreshKey);
   const projectReaderStatus = useJsonStatus<ProjectReaderStatus>("/project-reader/status", refreshKey);
   const logStatus = useJsonStatus<LogStatus>("/logs/status", refreshKey);
@@ -823,6 +844,38 @@ function DebugWindow() {
             <div><span>Configured</span><strong>{modelStatus?.configured ? "yes" : "no"}</strong></div>
             <div><span>Provider</span><strong>{modelStatus?.active_provider ?? "unavailable"}</strong></div>
             <div><span>Model</span><strong>{modelStatus?.model ?? "unavailable"}</strong></div>
+            <div><span>Requested</span><strong>{modelConfig?.enabled_requested ? "yes" : "no"}</strong></div>
+            <div><span>Permission</span><strong>{modelConfig?.permission_allowed ? "allowed" : "blocked"}</strong></div>
+            <div><span>Real calls</span><strong>{modelConfig?.real_model_calls ? "yes" : "no"}</strong></div>
+            <div><span>Config mode</span><strong>{modelConfig?.read_only ? "read only" : "editable"}</strong></div>
+          </div>
+          <div className="debug-event-list">
+            {modelConfig && Object.keys(modelConfig.providers).length > 0 ? (
+              Object.entries(modelConfig.providers).map(([name, provider]) => (
+                <article className="debug-event" key={name}>
+                  <div className="debug-event-head">
+                    <strong>{name}</strong>
+                    <span>{name === modelConfig.active_provider ? "active" : "standby"}</span>
+                  </div>
+                  <pre>
+                    {JSON.stringify(
+                      {
+                        base_url: provider.base_url,
+                        model: provider.model,
+                        temperature: provider.temperature,
+                        stream: provider.stream,
+                        api_key_configured: provider.api_key_configured,
+                        api_key_masked: provider.api_key_masked || "(empty)"
+                      },
+                      null,
+                      2
+                    )}
+                  </pre>
+                </article>
+              ))
+            ) : (
+              <p className="debug-empty">Provider config unavailable.</p>
+            )}
           </div>
         </section>
       );

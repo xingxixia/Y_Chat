@@ -45,18 +45,26 @@ GET /model/provider/status
 Returns whether the configured model provider is enabled, configured, and which
 provider/model names are selected. This endpoint does not call a model.
 
-Future model provider config endpoints:
+Model provider config endpoint:
 
 ```text
 GET /model/provider/config
+```
+
+Current implementation is read-only. It returns provider names, selected
+provider, enabled flags, model names, base URLs, stream flags, temperatures, and
+masked key state only. API keys are never returned in clear text.
+
+Future model provider config endpoints:
+
+```text
 POST /model/provider/config
 POST /model/provider/enable
 ```
 
 Rules:
 
-- `GET /model/provider/config` returns provider names, selected provider,
-  enabled flags, model names, base URLs, and masked key state only.
+- `GET /model/provider/config` is implemented as a read-only masked view.
 - API keys must never be returned in clear text.
 - `POST /model/provider/config` may update provider selection, model/base URL,
   and API key values after secondary confirmation.

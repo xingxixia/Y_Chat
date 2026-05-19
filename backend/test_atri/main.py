@@ -7,7 +7,7 @@ from pydantic import BaseModel
 from .events import EventEnvelope, make_event
 from .logs import log_status_payload
 from .memory import add_memory_item, delete_memory_item, list_memory_items, memory_enabled
-from .model_provider import provider_status_payload
+from .model_provider import provider_config_payload, provider_status_payload
 from .permissions import permission_status_payload
 from .project_reader import list_root_files, status_payload as project_reader_status_payload
 from .reasoning import (
@@ -42,6 +42,11 @@ async def health() -> dict[str, str]:
 @app.get("/model/provider/status")
 async def model_provider_status() -> dict:
     return provider_status_payload()
+
+
+@app.get("/model/provider/config")
+async def model_provider_config() -> dict:
+    return provider_config_payload()
 
 
 @app.get("/permissions/status")

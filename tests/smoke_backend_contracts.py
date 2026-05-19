@@ -192,6 +192,13 @@ def main() -> None:
     assert_equal(provider.status_code, 200, "provider status")
     assert_equal(provider.json()["enabled"], False, "provider enabled default")
 
+    provider_config = client.get("/model/provider/config")
+    assert_equal(provider_config.status_code, 200, "provider config")
+    assert_equal(provider_config.json()["read_only"], True, "provider config read only")
+    assert_equal(provider_config.json()["real_model_calls"], False, "provider config real calls")
+    if "api_key" in str(provider_config.json()).replace("api_key_configured", "").replace("api_key_masked", ""):
+        raise AssertionError("provider config leaked an api_key field")
+
     permissions = client.get("/permissions/status")
     assert_equal(permissions.status_code, 200, "permissions status")
     assert_equal(permissions.json()["permissions"]["project.read"], False, "project read default")

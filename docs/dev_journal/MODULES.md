@@ -456,6 +456,9 @@ Current thin slice:
 
 - Added provider config reader and status payload.
 - Added `GET /model/provider/status`.
+- Added read-only `GET /model/provider/config` with masked API-key state,
+  provider names, active provider, model/base URL, stream flag, and enablement
+  gates. It does not save config and does not call a model.
 - No real model calls are implemented yet.
 - Calls are gated by `llm.enabled` and `permissions.model.call`, both off by
   default.

@@ -47,6 +47,19 @@ def test_model_provider_status_is_disabled_by_default() -> None:
     assert response.json()["enabled"] is False
 
 
+def test_model_provider_config_is_read_only_and_masked() -> None:
+    response = client.get("/model/provider/config")
+    assert response.status_code == 200
+    body = response.json()
+    assert body["read_only"] is True
+    assert body["real_model_calls"] is False
+    assert body["effective_enabled"] is False
+    assert "providers" in body
+    serialized = str(body)
+    assert "api_key" not in serialized or "api_key_configured" in serialized
+    assert "deepseek-secret" not in serialized
+
+
 def test_project_reader_is_blocked_by_default() -> None:
     response = client.get("/project-reader/files")
     assert response.status_code == 403

@@ -565,3 +565,7 @@
 - Added one structural schema-repair attempt for R1. Repair can fill missing
   empty required containers and is recorded in the run trace, but it must not
   invent actions, memory candidates, or new facts.
+- Added the read-only Model Provider config view: `/model/provider/config` and
+  Debug Model now expose active provider, model/base URL, stream settings,
+  enablement gates, and masked key state without returning clear-text API keys
+  or enabling real model calls.
