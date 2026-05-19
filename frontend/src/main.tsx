@@ -123,6 +123,21 @@ type ReasoningAuditRecord = {
   payload?: Record<string, unknown>;
 };
 
+type ReasoningActionRecord = {
+  action_id: string;
+  status: string;
+  created_at: string;
+  payload?: Record<string, unknown>;
+};
+
+type ReasoningPendingAction = {
+  pending_id: string;
+  action_id: string;
+  status: string;
+  created_at: string;
+  payload?: Record<string, unknown>;
+};
+
 type ReasoningRunsResponse = {
   runs: ReasoningRunSummary[];
 };
@@ -132,8 +147,8 @@ type ReasoningRunDetail = {
   steps: ReasoningStep[];
   schema_failures: ReasoningSchemaFailure[];
   memory_candidates: ReasoningCandidate[];
-  actions: unknown[];
-  pending_actions: unknown[];
+  actions: ReasoningActionRecord[];
+  pending_actions: ReasoningPendingAction[];
   audit: ReasoningAuditRecord[];
 };
 
@@ -895,6 +910,34 @@ function DebugWindow() {
                     ))
                   ) : (
                     <p className="debug-empty">No memory candidates.</p>
+                  )}
+                  <h3>Actions</h3>
+                  {reasoningRunDetail.actions.length > 0 ? (
+                    reasoningRunDetail.actions.map((action) => (
+                      <article className="debug-event" key={action.action_id}>
+                        <div className="debug-event-head">
+                          <strong>{String(action.payload?.name ?? action.action_id)}</strong>
+                          <span>{action.status}</span>
+                        </div>
+                        <pre>{JSON.stringify(action.payload ?? {}, null, 2)}</pre>
+                      </article>
+                    ))
+                  ) : (
+                    <p className="debug-empty">No action proposals.</p>
+                  )}
+                  <h3>Pending Actions</h3>
+                  {reasoningRunDetail.pending_actions.length > 0 ? (
+                    reasoningRunDetail.pending_actions.map((pending) => (
+                      <article className="debug-event reasoning-pending" key={pending.pending_id}>
+                        <div className="debug-event-head">
+                          <strong>{String(pending.payload?.name ?? pending.action_id)}</strong>
+                          <span>{pending.status}</span>
+                        </div>
+                        <pre>{JSON.stringify(pending.payload ?? {}, null, 2)}</pre>
+                      </article>
+                    ))
+                  ) : (
+                    <p className="debug-empty">No pending actions.</p>
                   )}
                   <h3>Audit</h3>
                   {reasoningRunDetail.audit.length > 0 ? (

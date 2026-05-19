@@ -63,6 +63,8 @@ def main() -> None:
     assert_equal(reasoning_detail.status_code, 200, "reasoning detail")
     assert_equal(reasoning_detail.json()["run"]["run_id"], run_id, "reasoning run id")
     assert_equal(reasoning_detail.json()["schema_failures"], [], "reasoning schema failures")
+    assert_equal(reasoning_detail.json()["actions"], [], "reasoning action proposals")
+    assert_equal(reasoning_detail.json()["pending_actions"], [], "reasoning pending actions")
     assert_equal(len(reasoning_detail.json()["audit"]), 1, "reasoning memory audit count")
     assert_equal(
         reasoning_detail.json()["audit"][0]["status"],
@@ -102,6 +104,51 @@ def main() -> None:
     assert_equal(failure_detail.json()["audit"], [], "schema failure audit writes")
     if len(failure_detail.json()["schema_failures"]) < 1:
         raise AssertionError("schema failure detail did not expose schema_failures")
+
+    def build_action_output(action_run_id, action_event):
+        output = original_builder(action_run_id, action_event)
+        output["actions"] = [
+            {
+                "action_id": "smoke-action-probe",
+                "capability": "project.read",
+                "name": "list_project_files",
+                "params": {"root_index": 0},
+                "reason": "exercise pending authorization storage",
+                "risk": "low",
+                "requires_confirmation": False,
+                "retryable": False,
+            }
+        ]
+        return output
+
+    with patch("test_atri.reasoning.build_deterministic_output", build_action_output):
+        action_response = client.post(
+            "/events/internal",
+            json={
+                "type": "user.command.submitted",
+                "source": "smoke",
+                "payload": {"text": "action proposal probe"},
+            },
+        )
+    assert_equal(action_response.status_code, 200, "action proposal status")
+    action_event_types = [event["type"] for event in action_response.json()["events"]]
+    if "action.proposed" not in action_event_types:
+        raise AssertionError(f"action.proposed missing: {action_event_types!r}")
+    if "action.pending_authorization" not in action_event_types:
+        raise AssertionError(f"action.pending_authorization missing: {action_event_types!r}")
+    if "action.executed" in action_event_types:
+        raise AssertionError(f"action should not execute in R1: {action_event_types!r}")
+    action_run_id = action_response.json()["events"][0]["payload"]["run_id"]
+    action_detail = client.get(f"/reasoning/runs/{action_run_id}")
+    assert_equal(action_detail.status_code, 200, "action proposal detail")
+    assert_equal(len(action_detail.json()["actions"]), 1, "action audit count")
+    assert_equal(action_detail.json()["actions"][0]["status"], "pending_authorization", "action status")
+    assert_equal(len(action_detail.json()["pending_actions"]), 1, "pending action count")
+    assert_equal(
+        action_detail.json()["pending_actions"][0]["payload"]["executed"],
+        False,
+        "pending action execution flag",
+    )
 
     provider = client.get("/model/provider/status")
     assert_equal(provider.status_code, 200, "provider status")

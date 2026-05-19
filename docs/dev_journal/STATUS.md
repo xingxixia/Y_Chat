@@ -258,6 +258,9 @@ Resolved on 2026-05-18:
 - Reasoning R1 now records memory-candidate creation audit rows
   (`candidate_recorded`) and exposes them in Debug Reasoning. This is still
   inspect-only and does not accept or write formal memory.
+- Reasoning R1 now stores action proposals and pending-authorization records
+  for structured outputs that contain actions. This is inspect-only: R1 does
+  not execute actions and pending rows are not treated as consent.
 - Project Reader thin slice is added: status and gated top-level listing
   endpoints exist, but reading is disabled by default and no roots are
   authorized.

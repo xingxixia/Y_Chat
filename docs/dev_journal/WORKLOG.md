@@ -555,3 +555,7 @@
   runs now store a `memory_write_audit` row with status `candidate_recorded`,
   run detail returns it, and Debug Reasoning displays it as inspect-only audit
   rather than accepted memory.
+- Added R1 action proposal storage: structured outputs containing actions now
+  create action audit rows, disabled or confirmation-required capabilities
+  create pending-action rows, Debug Reasoning displays both, and R1 still never
+  executes the action.

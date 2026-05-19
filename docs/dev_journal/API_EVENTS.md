@@ -177,6 +177,10 @@ Current Reasoning R1 implementation:
 - Successful R1 memory candidates create `memory_write_audit` records with
   status `candidate_recorded`. These audit rows explain candidate creation only;
   they do not mean the candidate has been accepted into formal memory.
+- R1 action proposals are policy-checked and stored as audit rows. Unauthorized
+  or confirmation-required actions create `pending_actions` rows and emit
+  `action.proposed` / `action.pending_authorization` events, but R1 never emits
+  `action.executed` and never runs the action.
 - If R1 schema validation fails, the run is marked `schema_failed`,
   `reasoning.schema.invalid` and `reasoning.failed` are emitted, schema errors
   are available from `GET /reasoning/runs/{run_id}`, and no memory candidates

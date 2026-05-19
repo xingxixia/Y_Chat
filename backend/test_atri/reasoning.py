@@ -13,6 +13,17 @@ from .events import EventEnvelope, make_event
 DB_PATH = RUNTIME_DIR / "test_atri.sqlite3"
 PROVIDER_NAME = "deterministic_fallback"
 SCHEMA_VERSION = "reasoning.v1"
+HIGH_RISK_ACTIONS = {
+    "external.http",
+    "external.lan",
+    "external.osc",
+    "file.write",
+    "input.control",
+    "process.run",
+    "screen.observe.long",
+    "voice.listen.long",
+    "vr.output",
+}
 
 
 def now_iso() -> str:
@@ -22,6 +33,13 @@ def now_iso() -> str:
 def reasoning_enabled() -> bool:
     config = load_config()
     return bool(config.get("reasoning", {}).get("enabled", True))
+
+
+def configured_permissions() -> dict[str, bool]:
+    permissions = load_config().get("permissions", {})
+    if not isinstance(permissions, dict):
+        return {}
+    return {str(name): bool(value) for name, value in permissions.items()}
 
 
 def ensure_reasoning_db() -> None:
@@ -240,6 +258,85 @@ def _record_schema_failure(db: sqlite3.Connection, run_id: str, error: str) -> N
     )
 
 
+def _normalize_action(action: dict[str, Any]) -> dict[str, Any]:
+    risk = str(action.get("risk", "low")).lower()
+    if risk not in {"low", "medium", "high"}:
+        risk = "medium"
+    return {
+        "action_id": str(action.get("action_id") or uuid4()),
+        "capability": str(action["capability"]),
+        "name": str(action["name"]),
+        "params": action.get("params") if isinstance(action.get("params"), dict) else {},
+        "reason": str(action.get("reason", "")),
+        "risk": risk,
+        "requires_confirmation": bool(action.get("requires_confirmation", False)),
+        "retryable": bool(action.get("retryable", False)),
+    }
+
+
+def _classify_action(action: dict[str, Any], permissions: dict[str, bool]) -> tuple[str, str]:
+    capability = str(action["capability"])
+    risk = str(action["risk"])
+    if risk == "high" or capability in HIGH_RISK_ACTIONS or action["requires_confirmation"]:
+        return "pending_authorization", "requires_secondary_confirmation"
+    if not permissions.get(capability, False):
+        return "pending_authorization", "permission_disabled"
+    return "approved_low_risk_not_executed", "r1_does_not_execute_actions"
+
+
+def _record_action_proposal(
+    db: sqlite3.Connection,
+    run_id: str,
+    action: dict[str, Any],
+    status: str,
+    reason: str,
+) -> None:
+    payload = {**action, "status": status, "policy_reason": reason, "executed": False}
+    db.execute(
+        """
+        INSERT INTO action_audit (
+            audit_id, run_id, action_id, status, payload_json, created_at
+        )
+        VALUES (?, ?, ?, ?, ?, ?)
+        """,
+        (
+            str(uuid4()),
+            run_id,
+            action["action_id"],
+            status,
+            json.dumps(payload, ensure_ascii=True),
+            now_iso(),
+        ),
+    )
+
+
+def _record_pending_action(
+    db: sqlite3.Connection,
+    run_id: str,
+    action: dict[str, Any],
+    reason: str,
+) -> str:
+    pending_id = str(uuid4())
+    payload = {**action, "pending_reason": reason, "executed": False}
+    db.execute(
+        """
+        INSERT INTO pending_actions (
+            pending_id, run_id, action_id, status, payload_json, created_at
+        )
+        VALUES (?, ?, ?, ?, ?, ?)
+        """,
+        (
+            pending_id,
+            run_id,
+            action["action_id"],
+            "pending",
+            json.dumps(payload, ensure_ascii=True),
+            now_iso(),
+        ),
+    )
+    return pending_id
+
+
 def build_deterministic_output(run_id: str, event: EventEnvelope) -> dict[str, Any]:
     text = str(event.payload.get("text", "")).strip()
     reply_text = (
@@ -320,6 +417,24 @@ def validate_reasoning_output(output: dict[str, Any], run_id: str) -> list[str]:
 
     if not isinstance(output.get("actions"), list):
         errors.append("actions must be a list")
+    else:
+        seen_action_ids: set[str] = set()
+        for index, action in enumerate(output["actions"]):
+            if not isinstance(action, dict):
+                errors.append(f"actions[{index}] must be an object")
+                continue
+            for field in ("capability", "name", "params", "reason", "risk"):
+                if field not in action:
+                    errors.append(f"actions[{index}].{field} is required")
+            if "action_id" in action:
+                action_id = str(action["action_id"])
+                if action_id in seen_action_ids:
+                    errors.append(f"actions[{index}].action_id is duplicated")
+                seen_action_ids.add(action_id)
+            if "params" in action and not isinstance(action["params"], dict):
+                errors.append(f"actions[{index}].params must be an object")
+            if "risk" in action and str(action["risk"]).lower() not in {"low", "medium", "high"}:
+                errors.append(f"actions[{index}].risk must be low, medium, or high")
 
     memory = output.get("memory")
     if not isinstance(memory, dict):
@@ -441,6 +556,36 @@ def run_deterministic_reasoning(event: EventEnvelope) -> dict[str, Any]:
             candidate_id = _insert_memory_candidate(db, run_id, candidate)
             _record_memory_write_audit(db, run_id, candidate, "candidate_recorded")
             candidate_ids.append(candidate_id)
+
+        permissions = configured_permissions()
+        action_records = []
+        pending_records = []
+        for raw_action in output["actions"]:
+            action = _normalize_action(raw_action)
+            status, policy_reason = _classify_action(action, permissions)
+            _record_action_proposal(db, run_id, action, status, policy_reason)
+            if status == "pending_authorization":
+                pending_id = _record_pending_action(db, run_id, action, policy_reason)
+                pending_records.append(
+                    {
+                        "pending_id": pending_id,
+                        "action_id": action["action_id"],
+                        "capability": action["capability"],
+                        "risk": action["risk"],
+                        "reason": policy_reason,
+                    }
+                )
+            action_records.append(
+                {
+                    "action_id": action["action_id"],
+                    "capability": action["capability"],
+                    "name": action["name"],
+                    "risk": action["risk"],
+                    "status": status,
+                    "reason": policy_reason,
+                }
+            )
+
         updated_at = now_iso()
         db.execute(
             """
@@ -514,26 +659,66 @@ def run_deterministic_reasoning(event: EventEnvelope) -> dict[str, Any]:
                 "schema_version": SCHEMA_VERSION,
                 "provider": PROVIDER_NAME,
                 "memory_candidate_ids": candidate_ids,
-            },
-            correlation_id=event.event_id,
-        ),
-        make_event(
-            "pet.bubble.show",
-            "backend",
-            {"text": reply_text, "run_id": run_id},
-            correlation_id=event.event_id,
-        ),
-        make_event(
-            "pet.state.changed",
-            "backend",
-            {
-                "state": "talking",
-                "previous_state": "thinking",
-                "run_id": run_id,
+                "action_ids": [record["action_id"] for record in action_records],
             },
             correlation_id=event.event_id,
         ),
     ]
+    for record in action_records:
+        events.append(
+            make_event(
+                "action.proposed",
+                "backend",
+                {
+                    "run_id": run_id,
+                    "action_id": record["action_id"],
+                    "capability": record["capability"],
+                    "name": record["name"],
+                    "risk": record["risk"],
+                    "status": record["status"],
+                    "reason": record["reason"],
+                    "executed": False,
+                },
+                correlation_id=event.event_id,
+            )
+        )
+    for record in pending_records:
+        events.append(
+            make_event(
+                "action.pending_authorization",
+                "backend",
+                {
+                    "run_id": run_id,
+                    "pending_id": record["pending_id"],
+                    "action_id": record["action_id"],
+                    "capability": record["capability"],
+                    "risk": record["risk"],
+                    "reason": record["reason"],
+                    "executed": False,
+                },
+                correlation_id=event.event_id,
+            )
+        )
+    events.extend(
+        [
+            make_event(
+                "pet.bubble.show",
+                "backend",
+                {"text": reply_text, "run_id": run_id},
+                correlation_id=event.event_id,
+            ),
+            make_event(
+                "pet.state.changed",
+                "backend",
+                {
+                    "state": "talking",
+                    "previous_state": "thinking",
+                    "run_id": run_id,
+                },
+                correlation_id=event.event_id,
+            ),
+        ]
+    )
 
     return {
         "run_id": run_id,
@@ -624,6 +809,24 @@ def get_reasoning_run(run_id: str) -> dict[str, Any] | None:
             """,
             (run_id,),
         ).fetchall()
+        action_audit = db.execute(
+            """
+            SELECT audit_id, run_id, action_id, status, payload_json, created_at
+            FROM action_audit
+            WHERE run_id = ?
+            ORDER BY created_at ASC
+            """,
+            (run_id,),
+        ).fetchall()
+        pending_actions = db.execute(
+            """
+            SELECT pending_id, run_id, action_id, status, payload_json, created_at
+            FROM pending_actions
+            WHERE run_id = ?
+            ORDER BY created_at ASC
+            """,
+            (run_id,),
+        ).fetchall()
         memory_audit = db.execute(
             """
             SELECT audit_id, run_id, candidate_id, status, payload_json, created_at
@@ -646,9 +849,32 @@ def get_reasoning_run(run_id: str) -> dict[str, Any] | None:
             }
             for row in candidates
         ],
-        "actions": [],
-        "pending_actions": [],
+        "actions": [
+            {
+                **dict(row),
+                "payload": json.loads(row["payload_json"]),
+                "payload_json": None,
+            }
+            for row in action_audit
+        ],
+        "pending_actions": [
+            {
+                **dict(row),
+                "payload": json.loads(row["payload_json"]),
+                "payload_json": None,
+            }
+            for row in pending_actions
+        ],
         "audit": [
+            {
+                "kind": "action",
+                **dict(row),
+                "payload": json.loads(row["payload_json"]),
+                "payload_json": None,
+            }
+            for row in action_audit
+        ]
+        + [
             {
                 "kind": "memory_write",
                 **dict(row),

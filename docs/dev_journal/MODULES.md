@@ -249,6 +249,10 @@ Current R1 backend slice:
 - Records a `memory_write_audit` entry when an R1 memory candidate is produced,
   so Debug can show why a candidate exists without treating it as accepted
   memory.
+- Records action proposals and pending-authorization rows for R1 structured
+  outputs that contain actions. R1 emits `action.proposed` and
+  `action.pending_authorization` events when appropriate, but it does not
+  execute actions or treat pending actions as consent.
 - Real model calls, schema repair, action execution, and automatic memory
   acceptance are still future slices.
 
@@ -321,8 +325,8 @@ Current thin slice:
 - `/logs/status` also cleans display-only log noise such as UTF-8 BOM, ANSI
   color escapes, and common UTF-8 mojibake before returning tails to Debug.
 - Reasoning page shows read-only Reasoning R1 status, recent runs, selected run
-  detail, steps, schema failures, memory candidates, and memory-candidate audit
-  records from `/reasoning/*` endpoints.
+  detail, steps, schema failures, memory candidates, action proposals, pending
+  actions, and audit records from `/reasoning/*` endpoints.
 - External, Voice, Screen, and VR/OSC pages show their current read-only
   capability permissions instead of blank placeholders.
 
