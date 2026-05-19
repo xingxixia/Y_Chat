@@ -11,6 +11,7 @@ BACKEND = ROOT / "backend"
 sys.path.insert(0, str(BACKEND))
 
 from test_atri.main import app  # noqa: E402
+from test_atri.logs import LOG_DIR  # noqa: E402
 
 
 def assert_equal(actual: object, expected: object, label: str) -> None:
@@ -52,6 +53,36 @@ def main() -> None:
     logs = client.get("/logs/status")
     assert_equal(logs.status_code, 200, "logs status")
     assert "logs" in logs.json()
+
+    log_probe = LOG_DIR / "redaction-smoke.log"
+    mojibake_arrow = bytes([0xE2, 0x9E, 0x9C]).decode("latin1")
+    log_probe.write_text(
+        "\n".join(
+            [
+                "Authorization: Bearer sk-secret-value",
+                "api_key=deepseek-secret",
+                "token=abc123456789",
+                "password: hunter2",
+                "\x1b",
+                f"[32m{mojibake_arrow}",
+                "[39m Local",
+            ]
+        ),
+        encoding="utf-8",
+    )
+    try:
+        redacted_logs = client.get("/logs/status").json()["logs"]
+    finally:
+        log_probe.unlink(missing_ok=True)
+    redaction_tail = "\n".join(
+        next(log["tail"] for log in redacted_logs if log["name"] == "redaction-smoke.log")
+    )
+    for secret in ("sk-secret-value", "deepseek-secret", "abc123456789", "hunter2"):
+        if secret in redaction_tail:
+            raise AssertionError(f"log redaction leaked {secret!r}: {redaction_tail!r}")
+    for noise in ("\x1b", "[32m", "[39m"):
+        if noise in redaction_tail:
+            raise AssertionError(f"log cleanup leaked {noise!r}: {redaction_tail!r}")
 
     project_reader = client.get("/project-reader/files")
     assert_equal(project_reader.status_code, 403, "project reader default denial")

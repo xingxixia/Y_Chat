@@ -91,6 +91,12 @@ Each log entry includes `kind: "error"` for `.err.log` files and
 `kind: "output"` for ordinary output logs.
 Before API key input or real provider calls are enabled, displayed log tails
 must redact API keys, authorization headers, bearer tokens, and similar secrets.
+Current implementation redacts common assignment and header forms such as
+`api_key=...`, `x-api-key: ...`, `token=...`, `secret=...`, `password=...`,
+`Authorization: ...`, and `Bearer ...`.
+Displayed tails also remove UTF-8 BOM markers, ANSI color escape sequences, and
+common UTF-8 mojibake from local tool output. This cleanup is display-only; raw
+log files remain unchanged on disk.
 
 Memory endpoints:
 

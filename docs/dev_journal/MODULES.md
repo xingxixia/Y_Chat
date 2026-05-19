@@ -292,6 +292,11 @@ Current thin slice:
   still unconfirmed.
 - Logs page shows read-only log file sizes and tail excerpts from the backend,
   with error logs and ordinary output logs colored differently.
+- Debug Logs receives backend-redacted log tails from `/logs/status`; it must
+  not display raw API keys, authorization headers, bearer tokens, or similar
+  secrets.
+- `/logs/status` also cleans display-only log noise such as UTF-8 BOM, ANSI
+  color escapes, and common UTF-8 mojibake before returning tails to Debug.
 - External, Voice, Screen, and VR/OSC pages show their current read-only
   capability permissions instead of blank placeholders.
 
@@ -417,6 +422,8 @@ Current thin slice:
 - No real model calls are implemented yet.
 - Calls are gated by `llm.enabled` and `permissions.model.call`, both off by
   default.
+- `/logs/status` now redacts common secret patterns before Debug provider config
+  input or real model calls are implemented.
 
 Accepted future model work:
 

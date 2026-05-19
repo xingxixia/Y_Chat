@@ -521,3 +521,13 @@
   the real runtime shape, implemented module boundaries, inactive/future module
   boundaries, current command event flow, and where Reasoning R1 will replace
   the backend placeholder decision path.
+- Implemented the first post-backup module slice: backend log redaction for
+  `/logs/status`, covering common API key, authorization header, bearer token,
+  token, secret, and password forms before they reach Debug Logs.
+- Extended `/logs/status` display cleanup to remove UTF-8 BOM markers, ANSI
+  color escape sequences, and common UTF-8 mojibake from Debug-visible tails
+  without modifying raw log files.
+- Added smoke coverage for `/logs/status` redaction and display cleanup.
+- Documented the Windows dev-server reload caveat: if direct/TestClient checks
+  pass but the running endpoint still shows old behavior, restart the dev
+  backend before judging the implementation.

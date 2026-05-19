@@ -22,6 +22,27 @@ Do not rewrite text blindly. Check:
 - JSON/YAML encoding.
 - Source file save encoding.
 
+## Logs Status Redaction Or Cleanup Looks Wrong
+
+Expected behavior:
+
+- `/logs/status` redacts API keys, authorization headers, bearer tokens, token,
+  secret, and password values before tails reach Debug Logs.
+- `/logs/status` cleans display-only noise such as UTF-8 BOM markers, ANSI
+  color escapes, and common UTF-8 mojibake. Raw log files remain unchanged.
+
+Check:
+
+- First test `test_atri.logs.clean_log_line` and `redact_log_line` directly.
+- Then test the FastAPI app through `TestClient`.
+- Then test the running `http://127.0.0.1:18080/logs/status` service.
+
+If direct/TestClient checks pass but the running service fails, the dev backend
+has not reloaded the latest source. Restart with `scripts/stop_dev.ps1` and
+`scripts/start_dev.ps1`, then retest the real endpoint.
+
+Do not assume `uvicorn reload=True` picked up every edit on Windows.
+
 ## Black or Blank Window
 
 Check:

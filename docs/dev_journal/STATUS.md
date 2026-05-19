@@ -234,6 +234,12 @@ Resolved on 2026-05-18:
   the three Electron windows, Electron main process responsibilities, FastAPI
   backend endpoints, runtime data, current command event flow, implemented
   module boundaries, and inactive/future module boundaries.
+- `/logs/status` now redacts common API key, authorization header, bearer token,
+  token, secret, and password patterns before returning log tails to Debug
+  Logs. This satisfies the safety prerequisite before future Debug provider key
+  input or real provider calls. The same endpoint also cleans display-only log
+  noise such as UTF-8 BOM, ANSI color escapes, and common UTF-8 mojibake while
+  leaving raw log files unchanged.
 - Project Reader thin slice is added: status and gated top-level listing
   endpoints exist, but reading is disabled by default and no roots are
   authorized.
