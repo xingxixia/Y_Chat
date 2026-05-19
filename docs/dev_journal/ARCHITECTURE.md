@@ -30,6 +30,77 @@ structured events.
 The backend produces events and state. The frontend renders those events. The
 backend must not directly control pixels in the normal path.
 
+## Current Overall Architecture
+
+Current runtime shape:
+
+```text
+User
+-> Electron windows
+   -> Pet window: Canvas pet, hit testing, bubble overlay, pet state
+   -> Command window: input surface, Ctrl+Space, command submit
+   -> Debug window: local inspection, module pages, logs, memory, events
+-> Electron main process
+   -> window ownership, shortcuts, dragging, mouse pass-through
+   -> local event buffer and runtime/events.jsonl history
+   -> HTTP bridge to backend
+-> FastAPI backend
+   -> health, internal events, provider status, permissions, logs, memory,
+      project-reader status
+-> runtime/
+   -> config.yaml, ignored logs, ignored SQLite, ignored event history
+```
+
+Current implemented module boundaries:
+
+- Frontend Shell: owns the three Electron windows, global shortcuts, local
+  event history, and IPC bridge.
+- Pet Renderer: owns Canvas pixel placeholder rendering, visible-pixel hit
+  testing, and normal-window-like drag behavior.
+- Bubble System: owns event-driven output bubbles inside the pet window.
+- Command Box: owns text input and `user.command.submitted` event creation.
+- Debug Window: owns read-only module inspection pages and manual Debug Memory
+  controls.
+- Backend API: owns local FastAPI endpoints and returns structured events.
+- Event Bus: exists as internal event envelopes through HTTP, WebSocket, IPC,
+  and local history.
+- State Manager: currently thin; pet state is carried by `pet.state.changed`
+  events.
+- Model Provider: status/config reader only; real model calls are not
+  implemented.
+- Memory Manager: manual Debug Memory note table only; automatic memory is not
+  connected.
+- Permission Manager: read-only configured permission status only; no toggle UI
+  exists.
+- Project Reader: status and gated top-level listing only; disabled by default.
+- Logs: read-only log status endpoint and Debug Logs page.
+
+Current inactive/future module boundaries:
+
+- Reasoning Orchestrator is accepted in design but not implemented.
+- Automatic memory, formal memory records, entity memory, deep retrieval, visual
+  capture, voice capture, VR, external adapters, real DeepSeek calls,
+  OpenAI-compatible real calls, vector/embedding retrieval, and action execution
+  remain inactive until their module slices are selected and implemented.
+
+Current data flow for a command:
+
+```text
+Command window submit
+-> Electron creates user.command.submitted
+-> Electron posts to POST /events/internal
+-> Backend placeholder returns pet.state.changed + pet.bubble.show +
+   pet.state.changed
+-> Electron records and forwards events
+-> Pet window updates state and bubble
+-> Debug window can inspect the event history
+```
+
+Future Reasoning R1 will replace only the backend placeholder decision path:
+`POST /events/internal` should route reasoning-capable events through the
+Reasoning Orchestrator while preserving the same event-driven frontend
+contract.
+
 ## Unified Multimodal Memory
 
 The accepted memory architecture is documented in

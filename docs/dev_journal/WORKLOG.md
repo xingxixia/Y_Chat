@@ -492,3 +492,32 @@
   key input or real provider calls are enabled.
 - Downgraded Chroma/vector wording in architecture to a future placeholder, not
   current implementation.
+- Initialized local git in `test1` and committed the current project state as
+  `baseline before doc gap fixes` before making further documentation edits.
+- Completed a documentation gap review for the accepted reasoning route without
+  changing code or the accepted memory architecture.
+- Corrected the Decisions wording so the reasoning full route is accepted while
+  visual capture, voice capture, OpenAI-compatible real calls,
+  vector/embedding retrieval, and final personality failure-copy style remain
+  separate follow-up plans.
+- Reworded safe fallback language so it cannot be misread as a separate
+  non-reasoning natural-language reply path.
+- Added a behavior-level Reasoning R1 contract: deterministic fallback executor
+  only, route `user.command.submitted` through the Orchestrator, record
+  traceable run/check/event/Debug state, inspect memory candidates without
+  writing long-term memory, allow only low-risk UI/state/debug events, and keep
+  failures auditable without pretending real model reasoning happened.
+- Added table-responsibility entries for memory candidates and provider config
+  audit, while leaving field-level SQLite schemas for the later Reasoning R1
+  implementation plan.
+- Marked `/logs/status` and Debug Logs redaction as a Reasoning R2 prerequisite
+  before API key input, provider config writes, provider switching, model
+  enablement, or real provider calls.
+- Historical worklog lines may mention earlier wording such as non-streaming
+  provider output; the current source documents now define the accepted rule:
+  provider transport may stream later, but the system only accepts complete
+  `reasoning.v1` JSON after schema validation.
+- Added a current overall architecture section to `ARCHITECTURE.md`, listing
+  the real runtime shape, implemented module boundaries, inactive/future module
+  boundaries, current command event flow, and where Reasoning R1 will replace
+  the backend placeholder decision path.

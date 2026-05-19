@@ -55,7 +55,8 @@ Queue:
 2. Reasoning full route implementation: implement the accepted Reasoning
    R-staged route from `REASONING_ARCHITECTURE.md`, starting with Reasoning R1:
    deterministic fallback executor, SQLite run/audit tables, and Debug
-   Reasoning skeleton. Real model calls remain default off.
+   Reasoning skeleton. Real model calls remain default off. Documentation gaps
+   found in the latest review have been fixed; implementation remains pending.
 3. Memory schema/docs alignment: implement the next thin slice from
    `MEMORY_ARCHITECTURE.md` without enabling vision, voice, or real model calls.
 4. Event Bus / History: add safer inspection and persistence for local internal
@@ -94,7 +95,7 @@ Discussed backlog, not all ready to implement:
     text.
   - Before API key input or real provider calls are enabled, Debug Logs and
     `/logs/status` must redact keys, authorization headers, tokens, and similar
-    secrets.
+    secrets. This is a Reasoning R2 prerequisite, not later polish.
   - Real model calls are default off, but may be manually enabled during
     development from Debug after secondary confirmation.
   - Use `reasoning.v1` structured JSON as the primary output protocol, with one
@@ -223,6 +224,16 @@ Resolved on 2026-05-18:
   action execution.
   Provider config, API key input, provider switching, and model enablement go
   through Debug with secondary confirmation and audit.
+- Reasoning documentation gap review completed on 2026-05-19: old wording that
+  treated the full reasoning chain as an unspecified follow-up was corrected;
+  Reasoning R1 now has a behavior-level contract; planned trace/audit table
+  responsibilities include memory candidates and provider config audit; and log
+  redaction is recorded as a prerequisite before API key input or real provider
+  calls.
+- Current overall runtime architecture is listed in `ARCHITECTURE.md`, including
+  the three Electron windows, Electron main process responsibilities, FastAPI
+  backend endpoints, runtime data, current command event flow, implemented
+  module boundaries, and inactive/future module boundaries.
 - Project Reader thin slice is added: status and gated top-level listing
   endpoints exist, but reading is disabled by default and no roots are
   authorized.

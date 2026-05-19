@@ -164,10 +164,12 @@
 - Future screen perception must support screenshots, OCR, VLM, mode switch, and
   audit logs, but OCR is not part of the first stage.
 - Future VR should use a general event protocol first; OSC can be an adapter.
-- Visual-system details, voice-system details, and the full reasoning-model
-  chain are follow-up design topics; do not treat them as fully specified by
-  the memory architecture alone. For the reasoning full route, visual and voice
-  remain observation/permission interface placeholders only.
+- The reasoning full route is accepted and owned by
+  `REASONING_ARCHITECTURE.md`. Visual capture, voice capture,
+  OpenAI-compatible real calls, vector/embedding retrieval, and final
+  personality failure-copy style remain separate follow-up plans. Visual and
+  voice remain observation/permission interface placeholders in the accepted
+  reasoning route.
 
 ## Visual Decisions
 

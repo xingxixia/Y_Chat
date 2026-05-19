@@ -69,7 +69,9 @@ directly write memory, execute actions, change permissions, or control UI.
 
 - Primary model output is schema-versioned JSON, starting with
   `schema_version: "reasoning.v1"`.
-- Natural-language fallback is allowed only as safe degradation.
+- Safe failure replies or degradation notices are allowed only after the
+  structured path fails safely. They are not a separate non-reasoning reply
+  path, and they must not execute actions or write memory from untrusted output.
 - Memory writes and actions are candidates until the orchestrator accepts them.
 - Do not show a normal user-facing reply bubble while the structured output is
   invalid and still being repaired.
@@ -749,7 +751,12 @@ Planned reasoning tables:
 - `action_audit`
 - `pending_actions`
 - `permission_audit`
+- `memory_write_candidates`
 - `memory_write_audit`
+- `provider_config_audit`
+
+This is a table-responsibility list only. Field-level SQLite schemas remain a
+Reasoning R1 implementation detail and should not be locked here.
 
 `runtime/events.jsonl` stores compact event summaries for local debugging. It is
 not the full reasoning or memory store.
@@ -918,6 +925,21 @@ Reasoning R1: deterministic fallback executor + SQLite + Debug skeleton.
 - Add read-only Debug Reasoning page showing run, step, provider, schema,
   action, memory candidate, audit, and failure state.
 
+Reasoning R1 behavior contract:
+
+- R1 uses only the deterministic fallback executor. It must not call DeepSeek,
+  OpenAI-compatible providers, local models, or any real model route.
+- `user.command.submitted` enters the Reasoning Orchestrator instead of
+  returning the current placeholder bubble sequence directly.
+- Each handled user command creates traceable run/step records, records schema
+  or check status, emits reasoning events, and is visible in Debug.
+- R1 may record memory candidates for inspection, but it must not write formal
+  long-term memory records.
+- R1 may emit low-risk UI, state, and debug events. Broader action execution is
+  not part of R1.
+- R1 failures must be auditable and visible in Debug, and must not pretend that
+  real model reasoning happened.
+
 Reasoning R2: provider configuration and DeepSeek.
 
 - Add the provider-neutral `generate_reasoning(request) -> response`
@@ -925,6 +947,10 @@ Reasoning R2: provider configuration and DeepSeek.
 - Implement DeepSeek as the first real provider route.
 - Keep OpenAI-compatible as an interface/config/status placeholder in this
   stage; do not make real OpenAI-compatible calls yet.
+- Before API key input, provider config writes, provider switching, model
+  enablement, or real provider calls are implemented, `/logs/status` and Debug
+  Logs must already redact API keys, authorization headers, bearer tokens, and
+  similar secrets.
 - Provider transport may stream bytes/tokens in a later implementation, but the
   system only accepts output after it has a complete `reasoning.v1` JSON object
   that passes schema validation.
