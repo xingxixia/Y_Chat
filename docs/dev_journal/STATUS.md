@@ -190,8 +190,9 @@ Resolved on 2026-05-18:
 - `scripts/stop_dev.ps1` stops the dev processes and frees the ports.
 - `GET /health` returns `{"status":"ok","app":"test_atri"}`.
 - Event Bus thin slice is connected: command submission posts
-  `user.command.submitted` to `POST /events/internal`, and the backend returns a
-  placeholder `pet.bubble.show` event.
+  `user.command.submitted` to `POST /events/internal`, and the backend routes it
+  through Reasoning R1's deterministic fallback executor before emitting a
+  safe `pet.bubble.show` event.
 - Event History thin slice is connected: Electron persists local diagnostic
   event summaries to `runtime/events.jsonl`, reloads recent events on startup,
   caps the Debug buffer at 80 events, and trims persisted history to 500 events.
@@ -240,6 +241,11 @@ Resolved on 2026-05-18:
   input or real provider calls. The same endpoint also cleans display-only log
   noise such as UTF-8 BOM, ANSI color escapes, and common UTF-8 mojibake while
   leaving raw log files unchanged.
+- Reasoning R1 backend skeleton is added: deterministic fallback runs are stored
+  in SQLite, command events emit reasoning trace events, read-only reasoning
+  status/run endpoints exist, and memory write candidates are recorded for
+  inspection only. Real model calls, formal long-term memory writes, broader
+  action execution, and the dedicated Debug Reasoning page remain future slices.
 - Project Reader thin slice is added: status and gated top-level listing
   endpoints exist, but reading is disabled by default and no roots are
   authorized.

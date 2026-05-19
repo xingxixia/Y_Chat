@@ -10,6 +10,12 @@ from .memory import add_memory_item, delete_memory_item, list_memory_items, memo
 from .model_provider import provider_status_payload
 from .permissions import permission_status_payload
 from .project_reader import list_root_files, status_payload as project_reader_status_payload
+from .reasoning import (
+    get_reasoning_run,
+    list_reasoning_runs,
+    reasoning_status_payload,
+    run_deterministic_reasoning,
+)
 
 
 app = FastAPI(title="test atri backend", version="0.1.0")
@@ -46,6 +52,24 @@ async def permissions_status() -> dict:
 @app.get("/logs/status")
 async def logs_status() -> dict:
     return log_status_payload()
+
+
+@app.get("/reasoning/status")
+async def reasoning_status() -> dict:
+    return reasoning_status_payload()
+
+
+@app.get("/reasoning/runs")
+async def reasoning_runs() -> dict:
+    return {"runs": list_reasoning_runs()}
+
+
+@app.get("/reasoning/runs/{run_id}")
+async def reasoning_run_detail(run_id: str) -> dict:
+    run = get_reasoning_run(run_id)
+    if run is None:
+        raise HTTPException(status_code=404, detail="reasoning run not found")
+    return run
 
 
 @app.get("/memory")
@@ -93,34 +117,7 @@ async def project_reader_files(root_index: int = 0) -> dict:
 @app.post("/events/internal")
 async def internal_event(event: EventEnvelope) -> dict[str, list[dict]]:
     if event.type == "user.command.submitted":
-        text = str(event.payload.get("text", "")).strip()
-        thinking = make_event(
-            "pet.state.changed",
-            "backend",
-            {
-                "state": "thinking",
-                "previous_state": "idle",
-            },
-            correlation_id=event.event_id,
-        )
-        response = make_event(
-            "pet.bubble.show",
-            "backend",
-            {
-                "text": f"Received: {text}\n\nBackend event bus is connected."
-            },
-            correlation_id=event.event_id,
-        )
-        talking = make_event(
-            "pet.state.changed",
-            "backend",
-            {
-                "state": "talking",
-                "previous_state": "thinking",
-            },
-            correlation_id=event.event_id,
-        )
-        return {"events": [thinking.model_dump(), response.model_dump(), talking.model_dump()]}
+        return {"events": run_deterministic_reasoning(event)["events"]}
 
     debug = make_event(
         "debug.log",

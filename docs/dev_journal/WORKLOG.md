@@ -531,3 +531,10 @@
 - Documented the Windows dev-server reload caveat: if direct/TestClient checks
   pass but the running endpoint still shows old behavior, restart the dev
   backend before judging the implementation.
+- Implemented the Reasoning R1 backend skeleton: added SQLite-backed reasoning
+  run/step/memory-candidate tables, read-only reasoning status/run endpoints,
+  deterministic fallback command handling, and reasoning trace events before the
+  normal state/bubble output.
+- Kept R1 within its documented boundary: no real model calls, no formal
+  long-term memory writes, no broader action execution, and no dedicated Debug
+  Reasoning page yet.

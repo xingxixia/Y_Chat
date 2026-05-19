@@ -229,6 +229,20 @@ Planned Debug UI:
 - memory write candidates
 - audit records and schema failures
 
+Current R1 backend slice:
+
+- Added SQLite-backed reasoning run and step trace tables.
+- Added read-only endpoints: `GET /reasoning/status`, `GET /reasoning/runs`,
+  and `GET /reasoning/runs/{run_id}`.
+- Routed `user.command.submitted` through a deterministic fallback executor
+  instead of the older direct placeholder bubble path.
+- Emits `reasoning.started`, `reasoning.step.completed`, and
+  `reasoning.output.produced` before the normal state and bubble events.
+- Records memory write candidates for Debug inspection only; they are not
+  accepted as formal memory records.
+- Real model calls, action execution, and the dedicated Debug Reasoning page are
+  still future slices.
+
 Accepted full implementation route:
 
 - Reasoning R1: deterministic fallback executor, SQLite reasoning tables, and

@@ -38,9 +38,27 @@ def main() -> None:
     event_types = [event["type"] for event in event_response.json()["events"]]
     assert_equal(
         event_types,
-        ["pet.state.changed", "pet.bubble.show", "pet.state.changed"],
+        [
+            "reasoning.started",
+            "pet.state.changed",
+            "reasoning.step.completed",
+            "reasoning.step.completed",
+            "reasoning.output.produced",
+            "pet.bubble.show",
+            "pet.state.changed",
+        ],
         "command event sequence",
     )
+    run_id = event_response.json()["events"][0]["payload"]["run_id"]
+
+    reasoning_status = client.get("/reasoning/status")
+    assert_equal(reasoning_status.status_code, 200, "reasoning status")
+    assert_equal(reasoning_status.json()["provider"], "deterministic_fallback", "r1 provider")
+    assert_equal(reasoning_status.json()["real_model_calls"], False, "r1 real model calls")
+
+    reasoning_detail = client.get(f"/reasoning/runs/{run_id}")
+    assert_equal(reasoning_detail.status_code, 200, "reasoning detail")
+    assert_equal(reasoning_detail.json()["run"]["run_id"], run_id, "reasoning run id")
 
     provider = client.get("/model/provider/status")
     assert_equal(provider.status_code, 200, "provider status")

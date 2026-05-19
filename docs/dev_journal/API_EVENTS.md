@@ -31,10 +31,10 @@ Request body is one event envelope. Response body:
 }
 ```
 
-Current thin-slice behavior: `user.command.submitted` returns a placeholder
-`pet.state.changed` / `pet.bubble.show` / `pet.state.changed` sequence from the
-backend, proving the frontend command path goes through the backend event bus
-instead of an Electron-only shortcut.
+Current thin-slice behavior: `user.command.submitted` routes through Reasoning
+R1's deterministic fallback executor. The backend emits reasoning trace events,
+state events, and a safe fallback `pet.bubble.show` response. Real model calls,
+formal long-term memory writes, and action execution remain disabled.
 
 Model provider status endpoint:
 
@@ -164,6 +164,17 @@ Rules:
 - `POST /events/internal` should later route `user.command.submitted` and other
   reasoning-capable events through the Reasoning Orchestrator instead of
   returning the current placeholder bubble sequence directly.
+
+Current Reasoning R1 implementation:
+
+- `GET /reasoning/status`, `GET /reasoning/runs`, and
+  `GET /reasoning/runs/{run_id}` exist as read-only Debug endpoints.
+- `user.command.submitted` creates a deterministic fallback run with provider
+  `deterministic_fallback`.
+- R1 records run and step trace, plus non-accepted memory write candidates for
+  inspection.
+- R1 does not call real models, write formal long-term memory, or execute
+  broader actions.
 
 ## Internal WebSocket
 
