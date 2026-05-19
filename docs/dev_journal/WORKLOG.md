@@ -559,3 +559,9 @@
   create action audit rows, disabled or confirmation-required capabilities
   create pending-action rows, Debug Reasoning displays both, and R1 still never
   executes the action.
+- Added the R1 provider-neutral generation shell: command runs now build a
+  `reasoning_request.v1` packet and call `generate_reasoning(request)`, which
+  currently routes only to deterministic fallback and never calls a real model.
+- Added one structural schema-repair attempt for R1. Repair can fill missing
+  empty required containers and is recorded in the run trace, but it must not
+  invent actions, memory candidates, or new facts.

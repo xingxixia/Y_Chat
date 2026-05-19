@@ -24,6 +24,26 @@ HIGH_RISK_ACTIONS = {
     "voice.listen.long",
     "vr.output",
 }
+REPAIRABLE_TOP_LEVEL_DEFAULTS: dict[str, Any] = {
+    "actions": [],
+    "observations": [],
+    "voice": {"speak": False, "text": None, "voice_style": None},
+    "debug": {
+        "depth": "lightweight",
+        "needs_deep_retrieval": False,
+        "deep_retrieval_query": None,
+        "trace": [],
+    },
+    "audit": {"safety_notes": [], "permission_requests": []},
+}
+
+
+class ReasoningRequest(dict):
+    pass
+
+
+class ReasoningResponse(dict):
+    pass
 
 
 def now_iso() -> str:
@@ -258,6 +278,28 @@ def _record_schema_failure(db: sqlite3.Connection, run_id: str, error: str) -> N
     )
 
 
+def _record_repair_attempt(
+    db: sqlite3.Connection,
+    run_id: str,
+    status: str,
+    before_errors: list[str],
+    after_errors: list[str],
+) -> None:
+    payload = {
+        "status": status,
+        "before_errors": before_errors,
+        "after_errors": after_errors,
+        "repair_policy": "fill_missing_structural_defaults_only",
+    }
+    db.execute(
+        """
+        INSERT INTO reasoning_schema_failures (failure_id, run_id, error, created_at)
+        VALUES (?, ?, ?, ?)
+        """,
+        (str(uuid4()), run_id, json.dumps(payload, ensure_ascii=True), now_iso()),
+    )
+
+
 def _normalize_action(action: dict[str, Any]) -> dict[str, Any]:
     risk = str(action.get("risk", "low")).lower()
     if risk not in {"low", "medium", "high"}:
@@ -397,6 +439,86 @@ def build_deterministic_output(run_id: str, event: EventEnvelope) -> dict[str, A
     }
 
 
+def build_reasoning_request(run_id: str, event: EventEnvelope) -> ReasoningRequest:
+    text = str(event.payload.get("text", "")).strip()
+    return ReasoningRequest(
+        {
+            "schema_version": "reasoning_request.v1",
+            "run_id": run_id,
+            "source_event": event.model_dump(),
+            "depth": "lightweight",
+            "provider": PROVIDER_NAME,
+            "context": {
+                "current_event_text": text,
+                "recent_summary": [],
+                "entity_refs": [],
+                "core_memory_summary": [],
+            },
+            "real_model_calls": False,
+        }
+    )
+
+
+def generate_reasoning(request: ReasoningRequest) -> ReasoningResponse:
+    event = EventEnvelope.model_validate(request["source_event"])
+    output = build_deterministic_output(str(request["run_id"]), event)
+    return ReasoningResponse(
+        {
+            "provider": PROVIDER_NAME,
+            "real_model_call": False,
+            "output": output,
+        }
+    )
+
+
+def repair_reasoning_output(
+    output: dict[str, Any],
+    run_id: str,
+    event: EventEnvelope,
+) -> dict[str, Any]:
+    repaired = dict(output)
+    repaired.setdefault("schema_version", SCHEMA_VERSION)
+    repaired.setdefault("run_id", run_id)
+    for key, value in REPAIRABLE_TOP_LEVEL_DEFAULTS.items():
+        if key not in repaired:
+            repaired[key] = value.copy() if isinstance(value, dict) else list(value)
+
+    if "reply" not in repaired:
+        repaired["reply"] = {
+            "should_reply": False,
+            "text": "",
+            "bubble_text": "",
+            "style": "normal",
+            "final": True,
+        }
+    elif isinstance(repaired["reply"], dict):
+        repaired["reply"].setdefault("should_reply", False)
+        repaired["reply"].setdefault("text", "")
+        repaired["reply"].setdefault("bubble_text", repaired["reply"].get("text", ""))
+        repaired["reply"].setdefault("style", "normal")
+        repaired["reply"].setdefault("final", True)
+
+    if "state" not in repaired:
+        repaired["state"] = {
+            "pet_state": "idle",
+            "emotion": "neutral",
+            "animation": None,
+        }
+
+    if "memory" not in repaired:
+        repaired["memory"] = {
+            "write_candidates": [],
+            "do_not_write_reason": "schema_repair_added_empty_memory_section",
+            "needs_consolidation": False,
+        }
+    elif isinstance(repaired["memory"], dict):
+        repaired["memory"].setdefault("write_candidates", [])
+        repaired["memory"].setdefault("do_not_write_reason", "schema_repair")
+        repaired["memory"].setdefault("needs_consolidation", False)
+
+    return repaired
+
+
 def validate_reasoning_output(output: dict[str, Any], run_id: str) -> list[str]:
     errors: list[str] = []
     if output.get("schema_version") != SCHEMA_VERSION:
@@ -460,8 +582,18 @@ def run_deterministic_reasoning(event: EventEnvelope) -> dict[str, Any]:
 
     run_id = str(uuid4())
     created_at = now_iso()
-    output = build_deterministic_output(run_id, event)
+    request = build_reasoning_request(run_id, event)
+    response = generate_reasoning(request)
+    output = response["output"]
     validation_errors = validate_reasoning_output(output, run_id)
+    repaired = False
+    repair_errors: list[str] = []
+    if validation_errors:
+        repaired_output = repair_reasoning_output(output, run_id, event)
+        repair_errors = validate_reasoning_output(repaired_output, run_id)
+        if not repair_errors:
+            output = repaired_output
+            repaired = True
     reply = output.get("reply") if isinstance(output.get("reply"), dict) else {}
     reply_text = str(reply.get("bubble_text") or reply.get("text") or "")
 
@@ -499,19 +631,36 @@ def run_deterministic_reasoning(event: EventEnvelope) -> dict[str, Any]:
             db,
             run_id,
             2,
-            "deterministic_fallback",
+            "provider_running",
             "completed",
-            "R1 produced a safe deterministic fallback reasoning.v1 output.",
+            "R1 called generate_reasoning through the deterministic fallback provider route.",
         )
         schema_step_id = _insert_step(
             db,
             run_id,
             3,
             "schema_validating",
-            "completed" if not validation_errors else "failed",
+            "completed" if not validation_errors or repaired else "failed",
             "R1 validated deterministic fallback output against reasoning.v1.",
         )
         if validation_errors:
+            _record_repair_attempt(
+                db,
+                run_id,
+                "succeeded" if repaired else "failed",
+                validation_errors,
+                repair_errors,
+            )
+            repair_step_id = _insert_step(
+                db,
+                run_id,
+                4,
+                "schema_repair",
+                "completed" if repaired else "failed",
+                "R1 attempted one structural schema repair without adding actions or memory.",
+            )
+
+        if validation_errors and not repaired:
             for error in validation_errors:
                 _record_schema_failure(db, run_id, error)
             db.execute(
@@ -540,6 +689,17 @@ def run_deterministic_reasoning(event: EventEnvelope) -> dict[str, Any]:
                         "reasoning.schema.invalid",
                         "backend",
                         {"run_id": run_id, "errors": validation_errors},
+                        correlation_id=event.event_id,
+                    ).model_dump(),
+                    make_event(
+                        "reasoning.repair.requested",
+                        "backend",
+                        {
+                            "run_id": run_id,
+                            "step_id": repair_step_id,
+                            "status": "failed",
+                            "errors": repair_errors,
+                        },
                         correlation_id=event.event_id,
                     ).model_dump(),
                     make_event(
@@ -635,7 +795,7 @@ def run_deterministic_reasoning(event: EventEnvelope) -> dict[str, Any]:
             {
                 "run_id": run_id,
                 "step_id": output_step_id,
-                "step_type": "deterministic_fallback",
+                "step_type": "provider_running",
                 "status": "completed",
             },
             correlation_id=event.event_id,
@@ -664,6 +824,20 @@ def run_deterministic_reasoning(event: EventEnvelope) -> dict[str, Any]:
             correlation_id=event.event_id,
         ),
     ]
+    if repaired:
+        events.append(
+            make_event(
+                "reasoning.repair.requested",
+                "backend",
+                {
+                    "run_id": run_id,
+                    "step_id": repair_step_id,
+                    "status": "completed",
+                    "errors": validation_errors,
+                },
+                correlation_id=event.event_id,
+            )
+        )
     for record in action_records:
         events.append(
             make_event(

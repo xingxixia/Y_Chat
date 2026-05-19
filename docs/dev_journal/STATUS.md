@@ -249,9 +249,13 @@ Resolved on 2026-05-18:
 - Debug Window now includes a read-only Reasoning page for R1 status, recent
   runs, selected run steps, and memory candidates. It does not configure
   providers, enable model calls, execute actions, or accept memory writes.
-- Reasoning R1 now builds and validates a `reasoning.v1` structured output
-  object before emitting accepted reply and memory-candidate events. Schema
-  repair and real provider output remain future slices.
+- Reasoning R1 now builds `reasoning_request.v1`, calls a provider-neutral
+  `generate_reasoning(request)` interface, and validates the returned
+  `reasoning.v1` structured output before emitting accepted reply and
+  memory-candidate events. The only current provider route is still
+  deterministic fallback; real provider output remains future work.
+- Reasoning R1 now has one structural schema-repair attempt. It can fill missing
+  required containers but must not invent actions, memory candidates, or facts.
 - Reasoning R1 schema failures are now auditable through run detail and visible
   in Debug Reasoning. Invalid structured output emits failure events and does
   not create memory write candidates.

@@ -62,6 +62,11 @@ def main() -> None:
     reasoning_detail = client.get(f"/reasoning/runs/{run_id}")
     assert_equal(reasoning_detail.status_code, 200, "reasoning detail")
     assert_equal(reasoning_detail.json()["run"]["run_id"], run_id, "reasoning run id")
+    assert_equal(
+        [step["step_type"] for step in reasoning_detail.json()["steps"][:3]],
+        ["context_check", "provider_running", "schema_validating"],
+        "reasoning step sequence",
+    )
     assert_equal(reasoning_detail.json()["schema_failures"], [], "reasoning schema failures")
     assert_equal(reasoning_detail.json()["actions"], [], "reasoning action proposals")
     assert_equal(reasoning_detail.json()["pending_actions"], [], "reasoning pending actions")
@@ -93,7 +98,12 @@ def main() -> None:
     failure_events = [event["type"] for event in failure_response.json()["events"]]
     assert_equal(
         failure_events,
-        ["reasoning.started", "reasoning.schema.invalid", "reasoning.failed"],
+        [
+            "reasoning.started",
+            "reasoning.schema.invalid",
+            "reasoning.repair.requested",
+            "reasoning.failed",
+        ],
         "schema failure event sequence",
     )
     failure_run_id = failure_response.json()["events"][0]["payload"]["run_id"]
@@ -104,6 +114,34 @@ def main() -> None:
     assert_equal(failure_detail.json()["audit"], [], "schema failure audit writes")
     if len(failure_detail.json()["schema_failures"]) < 1:
         raise AssertionError("schema failure detail did not expose schema_failures")
+
+    def build_repairable_output(repair_run_id, repair_event):
+        output = original_builder(repair_run_id, repair_event)
+        output.pop("actions")
+        output.pop("memory")
+        return output
+
+    with patch("test_atri.reasoning.build_deterministic_output", build_repairable_output):
+        repair_response = client.post(
+            "/events/internal",
+            json={
+                "type": "user.command.submitted",
+                "source": "smoke",
+                "payload": {"text": "repairable schema probe"},
+            },
+        )
+    assert_equal(repair_response.status_code, 200, "schema repair status")
+    repair_event_types = [event["type"] for event in repair_response.json()["events"]]
+    if "reasoning.repair.requested" not in repair_event_types:
+        raise AssertionError(f"schema repair event missing: {repair_event_types!r}")
+    if "reasoning.failed" in repair_event_types:
+        raise AssertionError(f"repairable schema should not fail: {repair_event_types!r}")
+    repair_run_id = repair_response.json()["events"][0]["payload"]["run_id"]
+    repair_detail = client.get(f"/reasoning/runs/{repair_run_id}")
+    assert_equal(repair_detail.status_code, 200, "schema repair detail")
+    assert_equal(repair_detail.json()["run"]["status"], "completed", "schema repair run status")
+    assert_equal(len(repair_detail.json()["memory_candidates"]), 0, "schema repair memory writes")
+    assert_equal(len(repair_detail.json()["actions"]), 0, "schema repair actions")
 
     def build_action_output(action_run_id, action_event):
         output = original_builder(action_run_id, action_event)

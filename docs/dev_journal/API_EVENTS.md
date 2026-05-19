@@ -171,9 +171,14 @@ Current Reasoning R1 implementation:
   `GET /reasoning/runs/{run_id}` exist as read-only Debug endpoints.
 - `user.command.submitted` creates a deterministic fallback run with provider
   `deterministic_fallback`.
-- R1 builds a `reasoning.v1` output object, validates its required structure,
-  records schema-validation state, and stores non-accepted memory write
-  candidates for inspection.
+- R1 builds a `reasoning_request.v1` context packet, calls the provider-neutral
+  `generate_reasoning(request)` interface, and currently routes that interface
+  to the deterministic fallback implementation only.
+- R1 validates the returned `reasoning.v1` output, records schema-validation
+  state, and stores non-accepted memory write candidates for inspection.
+- R1 has one structural schema-repair attempt. A successful repair may add
+  missing empty containers, but it must not add actions, memory candidates, or
+  new facts.
 - Successful R1 memory candidates create `memory_write_audit` records with
   status `candidate_recorded`. These audit rows explain candidate creation only;
   they do not mean the candidate has been accepted into formal memory.
@@ -182,9 +187,9 @@ Current Reasoning R1 implementation:
   `action.proposed` / `action.pending_authorization` events, but R1 never emits
   `action.executed` and never runs the action.
 - If R1 schema validation fails, the run is marked `schema_failed`,
-  `reasoning.schema.invalid` and `reasoning.failed` are emitted, schema errors
-  are available from `GET /reasoning/runs/{run_id}`, and no memory candidates
-  are written.
+  `reasoning.schema.invalid`, `reasoning.repair.requested`, and
+  `reasoning.failed` are emitted, schema errors are available from
+  `GET /reasoning/runs/{run_id}`, and no memory candidates are written.
 - R1 does not call real models, write formal long-term memory, or execute
   broader actions.
 

@@ -238,9 +238,16 @@ Current R1 backend slice:
   instead of the older direct placeholder bubble path.
 - Emits `reasoning.started`, `reasoning.step.completed`, and
   `reasoning.output.produced` before the normal state and bubble events.
-- Deterministic fallback now builds a `reasoning.v1` output object, validates
+- R1 now builds a `reasoning_request.v1` context packet and calls a
+  provider-neutral `generate_reasoning(request)` interface. The only current
+  implementation is still the deterministic fallback route; no real model is
+  called.
+- Deterministic fallback now returns a `reasoning.v1` output object, validates
   the required structure, records schema-validation state, and only then emits
   accepted reply/memory-candidate events.
+- R1 has one structural schema-repair attempt. It may fill missing required
+  containers such as `actions: []` or `memory.write_candidates: []`, but it must
+  not invent facts, actions, or memory candidates.
 - Schema validation failures are stored in `reasoning_schema_failures`, exposed
   in run detail, and shown in Debug. Failed schema output does not emit a normal
   reply and does not create memory write candidates.
@@ -253,8 +260,8 @@ Current R1 backend slice:
   outputs that contain actions. R1 emits `action.proposed` and
   `action.pending_authorization` events when appropriate, but it does not
   execute actions or treat pending actions as consent.
-- Real model calls, schema repair, action execution, and automatic memory
-  acceptance are still future slices.
+- Real model calls, action execution, and automatic memory acceptance are still
+  future slices.
 
 Accepted full implementation route:
 

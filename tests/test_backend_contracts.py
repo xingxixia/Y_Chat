@@ -79,7 +79,7 @@ def test_reasoning_r1_status_and_run_detail() -> None:
     assert body["run"]["run_id"] == run_id
     assert [step["step_type"] for step in body["steps"][:3]] == [
         "context_check",
-        "deterministic_fallback",
+        "provider_running",
         "schema_validating",
     ]
     assert len(body["memory_candidates"]) == 1
@@ -118,6 +118,7 @@ def test_reasoning_r1_schema_failure_is_auditable(monkeypatch) -> None:
     assert [event["type"] for event in events] == [
         "reasoning.started",
         "reasoning.schema.invalid",
+        "reasoning.repair.requested",
         "reasoning.failed",
     ]
 
@@ -127,10 +128,57 @@ def test_reasoning_r1_schema_failure_is_auditable(monkeypatch) -> None:
     body = detail.json()
     assert body["run"]["status"] == "schema_failed"
     assert "schema_version" in body["run"]["failure_summary"]
-    assert body["steps"][-1]["step_type"] == "schema_validating"
+    assert body["steps"][-2]["step_type"] == "schema_validating"
+    assert body["steps"][-2]["status"] == "failed"
+    assert body["steps"][-1]["step_type"] == "schema_repair"
     assert body["steps"][-1]["status"] == "failed"
     assert len(body["schema_failures"]) >= 1
     assert body["memory_candidates"] == []
+    assert body["audit"] == []
+
+
+def test_reasoning_r1_schema_repair_is_structural_only(monkeypatch) -> None:
+    original_builder = reasoning.build_deterministic_output
+
+    def build_repairable_output(run_id, event):
+        output = original_builder(run_id, event)
+        output.pop("actions")
+        output.pop("memory")
+        return output
+
+    monkeypatch.setattr(reasoning, "build_deterministic_output", build_repairable_output)
+
+    response = client.post(
+        "/events/internal",
+        json={
+            "type": "user.command.submitted",
+            "source": "test",
+            "payload": {"text": "repairable schema"},
+        },
+    )
+
+    assert response.status_code == 200
+    events = response.json()["events"]
+    event_types = [event["type"] for event in events]
+    assert "reasoning.repair.requested" in event_types
+    assert "reasoning.failed" not in event_types
+    assert "action.proposed" not in event_types
+
+    run_id = events[0]["payload"]["run_id"]
+    detail = client.get(f"/reasoning/runs/{run_id}")
+    assert detail.status_code == 200
+    body = detail.json()
+    assert body["run"]["status"] == "completed"
+    assert [step["step_type"] for step in body["steps"][:4]] == [
+        "context_check",
+        "provider_running",
+        "schema_validating",
+        "schema_repair",
+    ]
+    assert body["steps"][3]["status"] == "completed"
+    assert body["memory_candidates"] == []
+    assert body["actions"] == []
+    assert body["pending_actions"] == []
     assert body["audit"] == []
 
 
