@@ -6,7 +6,14 @@ from pydantic import BaseModel
 
 from .events import EventEnvelope, make_event
 from .logs import log_status_payload
-from .memory import add_memory_item, delete_memory_item, list_memory_items, memory_enabled
+from .memory import (
+    add_memory_item,
+    delete_memory_item,
+    list_memory_items,
+    list_memory_records,
+    memory_enabled,
+    memory_status_payload,
+)
 from .model_provider import provider_config_payload, provider_status_payload
 from .permissions import permission_status_payload
 from .project_reader import list_root_files, status_payload as project_reader_status_payload
@@ -82,6 +89,19 @@ async def memory_list() -> dict:
     return {
         "enabled": memory_enabled(),
         "items": list_memory_items(),
+    }
+
+
+@app.get("/memory/status")
+async def memory_status() -> dict:
+    return memory_status_payload()
+
+
+@app.get("/memory/records")
+async def memory_records() -> dict:
+    return {
+        "automatic_writes_enabled": False,
+        "records": list_memory_records(),
     }
 
 

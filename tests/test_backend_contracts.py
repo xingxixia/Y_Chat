@@ -71,6 +71,20 @@ def test_project_reader_is_blocked_by_default() -> None:
     assert response.status_code == 403
 
 
+def test_memory_formal_tables_are_read_only_shell() -> None:
+    status = client.get("/memory/status")
+    assert status.status_code == 200
+    body = status.json()
+    assert body["formal_tables_ready"] is True
+    assert body["automatic_writes_enabled"] is False
+    assert body["manual_notes_legacy"] is True
+
+    records = client.get("/memory/records")
+    assert records.status_code == 200
+    assert records.json()["automatic_writes_enabled"] is False
+    assert isinstance(records.json()["records"], list)
+
+
 def test_reasoning_r1_status_and_run_detail() -> None:
     event_response = client.post(
         "/events/internal",

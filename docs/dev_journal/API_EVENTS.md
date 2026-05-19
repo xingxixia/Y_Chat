@@ -109,21 +109,26 @@ log files remain unchanged on disk.
 Memory endpoints:
 
 ```text
+GET /memory/status
+GET /memory/records
 GET /memory
 POST /memory
 DELETE /memory/{item_id}
 ```
 
+`GET /memory/status` reports formal memory table readiness, manual-note count,
+formal record count, audit count, and `automatic_writes_enabled: false`.
+`GET /memory/records` is read-only and returns formal `memory_records`; it does
+not accept automatic writes.
 `GET /memory` returns the enabled flag and recent items. `POST /memory` creates
 a manual memory item only when `permissions.memory.write` is enabled.
 `DELETE /memory/{item_id}` removes an item. Automatic memory writes are not
 connected yet.
 
-Future unified memory endpoints are defined by `MEMORY_ARCHITECTURE.md`:
+Additional future unified memory endpoints are defined by
+`MEMORY_ARCHITECTURE.md`:
 
 ```text
-GET /memory/status
-GET /memory/records
 GET /memory/entities
 GET /memory/entities/{id}
 GET /memory/review

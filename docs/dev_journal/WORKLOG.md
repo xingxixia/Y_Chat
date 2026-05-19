@@ -579,3 +579,7 @@
   and Unicode-codepoint checks showed the API returns valid UTF-8 `➜`; the
   visible mojibake was from PowerShell display decoding, so
   `TROUBLESHOOTING.md` now records that check.
+- Added the formal Memory table shell: `memory_records` and `memory_audit_log`
+  are created in SQLite, `/memory/status` and `/memory/records` expose read-only
+  readiness/record data, and Debug Memory shows formal records while automatic
+  writes remain disabled.

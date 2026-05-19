@@ -89,6 +89,31 @@ type MemoryStatus = {
   items: Array<{ id: string; kind: string; text: string; created_at: string }>;
 };
 
+type FormalMemoryStatus = {
+  manual_enabled: boolean;
+  automatic_writes_enabled: boolean;
+  manual_items_count: number;
+  records_count: number;
+  audit_count: number;
+  formal_tables_ready: boolean;
+  manual_notes_legacy: boolean;
+};
+
+type FormalMemoryRecords = {
+  automatic_writes_enabled: boolean;
+  records: Array<{
+    record_id: string;
+    kind: string;
+    layer: string;
+    status: string;
+    version: number;
+    content?: Record<string, unknown>;
+    evidence?: unknown[];
+    created_at: string;
+    updated_at: string;
+  }>;
+};
+
 type ProjectReaderStatus = {
   enabled: boolean;
   allowed_roots: string[];
@@ -672,6 +697,8 @@ function DebugWindow() {
   const modelStatus = useJsonStatus<ModelProviderStatus>("/model/provider/status", refreshKey);
   const modelConfig = useJsonStatus<ModelProviderConfig>("/model/provider/config", refreshKey);
   const memoryStatus = useJsonStatus<MemoryStatus>("/memory", refreshKey);
+  const formalMemoryStatus = useJsonStatus<FormalMemoryStatus>("/memory/status", refreshKey);
+  const formalMemoryRecords = useJsonStatus<FormalMemoryRecords>("/memory/records", refreshKey);
   const projectReaderStatus = useJsonStatus<ProjectReaderStatus>("/project-reader/status", refreshKey);
   const logStatus = useJsonStatus<LogStatus>("/logs/status", refreshKey);
   const reasoningStatus = useJsonStatus<ReasoningStatus>("/reasoning/status", refreshKey);
@@ -1059,7 +1086,29 @@ function DebugWindow() {
           <div className="detail-grid">
             <div><span>Manual writes</span><strong>{memoryStatus?.enabled ? "enabled" : "disabled"}</strong></div>
             <div><span>Items</span><strong>{memoryStatus?.items.length ?? 0}</strong></div>
+            <div><span>Formal tables</span><strong>{formalMemoryStatus?.formal_tables_ready ? "ready" : "unavailable"}</strong></div>
+            <div><span>Auto writes</span><strong>{formalMemoryStatus?.automatic_writes_enabled ? "enabled" : "disabled"}</strong></div>
+            <div><span>Records</span><strong>{formalMemoryStatus?.records_count ?? 0}</strong></div>
+            <div><span>Audit rows</span><strong>{formalMemoryStatus?.audit_count ?? 0}</strong></div>
           </div>
+          <section className="debug-subsection">
+            <h3>Formal Records</h3>
+            {formalMemoryRecords && formalMemoryRecords.records.length > 0 ? (
+              <div className="debug-event-list">
+                {formalMemoryRecords.records.slice(0, 20).map((record) => (
+                  <article className="debug-event" key={record.record_id}>
+                    <div className="debug-event-head">
+                      <strong>{record.kind}</strong>
+                      <span>{record.layer} / v{record.version}</span>
+                    </div>
+                    <pre>{JSON.stringify(record, null, 2)}</pre>
+                  </article>
+                ))}
+              </div>
+            ) : (
+              <p className="debug-empty">No formal memory records yet. Automatic writes are disabled.</p>
+            )}
+          </section>
           <form
             className="memory-form"
             onSubmit={(event) => {

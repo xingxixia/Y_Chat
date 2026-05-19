@@ -279,6 +279,9 @@ Resolved on 2026-05-18:
 - Model Provider read-only config view is added: `/model/provider/config` and
   Debug Model show masked key state, provider settings, and enablement gates
   without saving keys or making real model calls.
+- Memory formal table shell is added: `memory_records` and `memory_audit_log`
+  exist, `/memory/status` and `/memory/records` are read-only, and automatic
+  writes remain disabled.
 - Bubble System behavior slice is added: long output segments automatically,
   segment timers are interruptible, and the final visual remains unconfirmed.
 - Backend contract smoke checks cover health, command event flow, disabled model

@@ -251,6 +251,13 @@ def main() -> None:
 
     memory = client.get("/memory")
     assert_equal(memory.status_code, 200, "memory status")
+    formal_memory = client.get("/memory/status")
+    assert_equal(formal_memory.status_code, 200, "formal memory status")
+    assert_equal(formal_memory.json()["formal_tables_ready"], True, "formal memory tables")
+    assert_equal(formal_memory.json()["automatic_writes_enabled"], False, "formal memory auto writes")
+    memory_records = client.get("/memory/records")
+    assert_equal(memory_records.status_code, 200, "formal memory records")
+    assert_equal(memory_records.json()["automatic_writes_enabled"], False, "formal memory records auto writes")
 
     created = client.post("/memory", json={"kind": "smoke", "text": "smoke memory item"})
     assert_equal(created.status_code, 200, "memory create status")

@@ -387,6 +387,10 @@ Current thin slice:
 
 - SQLite-backed `memory_items` table in `runtime/test_atri.sqlite3`.
 - `GET /memory`, `POST /memory`, and `DELETE /memory/{item_id}`.
+- Formal memory table shell is present: `memory_records` and
+  `memory_audit_log` exist for future automatic writes.
+- Read-only `GET /memory/status` and `GET /memory/records` expose formal table
+  readiness and records while reporting `automatic_writes_enabled: false`.
 - Manual writes are gated by `permissions.memory.write`.
 - Debug Memory page can add and delete manual memory notes.
 - Automatic memory writes are not connected yet.
