@@ -252,6 +252,9 @@ Resolved on 2026-05-18:
 - Reasoning R1 now builds and validates a `reasoning.v1` structured output
   object before emitting accepted reply and memory-candidate events. Schema
   repair and real provider output remain future slices.
+- Reasoning R1 schema failures are now auditable through run detail and visible
+  in Debug Reasoning. Invalid structured output emits failure events and does
+  not create memory write candidates.
 - Project Reader thin slice is added: status and gated top-level listing
   endpoints exist, but reading is disabled by default and no roots are
   authorized.

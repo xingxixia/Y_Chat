@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import sys
 from pathlib import Path
+from unittest.mock import patch
 
 from fastapi.testclient import TestClient
 
@@ -12,6 +13,7 @@ sys.path.insert(0, str(BACKEND))
 
 from test_atri.main import app  # noqa: E402
 from test_atri.logs import LOG_DIR  # noqa: E402
+from test_atri import reasoning  # noqa: E402
 
 
 def assert_equal(actual: object, expected: object, label: str) -> None:
@@ -60,6 +62,39 @@ def main() -> None:
     reasoning_detail = client.get(f"/reasoning/runs/{run_id}")
     assert_equal(reasoning_detail.status_code, 200, "reasoning detail")
     assert_equal(reasoning_detail.json()["run"]["run_id"], run_id, "reasoning run id")
+    assert_equal(reasoning_detail.json()["schema_failures"], [], "reasoning schema failures")
+
+    original_builder = reasoning.build_deterministic_output
+
+    def build_invalid_output(invalid_run_id, invalid_event):
+        output = original_builder(invalid_run_id, invalid_event)
+        output["schema_version"] = "broken"
+        output["reply"] = {"should_reply": True}
+        return output
+
+    with patch("test_atri.reasoning.build_deterministic_output", build_invalid_output):
+        failure_response = client.post(
+            "/events/internal",
+            json={
+                "type": "user.command.submitted",
+                "source": "smoke",
+                "payload": {"text": "schema failure probe"},
+            },
+        )
+    assert_equal(failure_response.status_code, 200, "schema failure status")
+    failure_events = [event["type"] for event in failure_response.json()["events"]]
+    assert_equal(
+        failure_events,
+        ["reasoning.started", "reasoning.schema.invalid", "reasoning.failed"],
+        "schema failure event sequence",
+    )
+    failure_run_id = failure_response.json()["events"][0]["payload"]["run_id"]
+    failure_detail = client.get(f"/reasoning/runs/{failure_run_id}")
+    assert_equal(failure_detail.status_code, 200, "schema failure detail")
+    assert_equal(failure_detail.json()["run"]["status"], "schema_failed", "schema failure run status")
+    assert_equal(len(failure_detail.json()["memory_candidates"]), 0, "schema failure memory writes")
+    if len(failure_detail.json()["schema_failures"]) < 1:
+        raise AssertionError("schema failure detail did not expose schema_failures")
 
     provider = client.get("/model/provider/status")
     assert_equal(provider.status_code, 200, "provider status")

@@ -107,6 +107,13 @@ type ReasoningCandidate = {
   payload?: Record<string, unknown>;
 };
 
+type ReasoningSchemaFailure = {
+  failure_id: string;
+  run_id: string;
+  error: string;
+  created_at: string;
+};
+
 type ReasoningRunsResponse = {
   runs: ReasoningRunSummary[];
 };
@@ -114,6 +121,7 @@ type ReasoningRunsResponse = {
 type ReasoningRunDetail = {
   run: ReasoningRunSummary;
   steps: ReasoningStep[];
+  schema_failures: ReasoningSchemaFailure[];
   memory_candidates: ReasoningCandidate[];
   actions: unknown[];
   pending_actions: unknown[];
@@ -832,6 +840,15 @@ function DebugWindow() {
                     <strong>{reasoningRunDetail.run.run_id}</strong>
                     <span>{reasoningRunDetail.run.event_type}</span>
                   </div>
+                  {reasoningRunDetail.run.failure_summary ? (
+                    <article className="debug-event reasoning-failure">
+                      <div className="debug-event-head">
+                        <strong>Failure</strong>
+                        <span>{reasoningRunDetail.run.status}</span>
+                      </div>
+                      <pre>{reasoningRunDetail.run.failure_summary}</pre>
+                    </article>
+                  ) : null}
                   <pre>{reasoningRunDetail.run.reply_text || "(no reply)"}</pre>
                   <h3>Steps</h3>
                   {reasoningRunDetail.steps.map((step) => (
@@ -843,6 +860,19 @@ function DebugWindow() {
                       <pre>{step.summary}</pre>
                     </article>
                   ))}
+                  <h3>Schema Failures</h3>
+                  {reasoningRunDetail.schema_failures.length > 0 ? (
+                    reasoningRunDetail.schema_failures.map((failure) => (
+                      <article className="debug-event reasoning-failure" key={failure.failure_id}>
+                        <div className="debug-event-head">
+                          <strong>{failure.error}</strong>
+                          <span>{new Date(failure.created_at).toLocaleTimeString()}</span>
+                        </div>
+                      </article>
+                    ))
+                  ) : (
+                    <p className="debug-empty">No schema failures.</p>
+                  )}
                   <h3>Memory Candidates</h3>
                   {reasoningRunDetail.memory_candidates.length > 0 ? (
                     reasoningRunDetail.memory_candidates.map((candidate) => (

@@ -174,6 +174,10 @@ Current Reasoning R1 implementation:
 - R1 builds a `reasoning.v1` output object, validates its required structure,
   records schema-validation state, and stores non-accepted memory write
   candidates for inspection.
+- If R1 schema validation fails, the run is marked `schema_failed`,
+  `reasoning.schema.invalid` and `reasoning.failed` are emitted, schema errors
+  are available from `GET /reasoning/runs/{run_id}`, and no memory candidates
+  are written.
 - R1 does not call real models, write formal long-term memory, or execute
   broader actions.
 

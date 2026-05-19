@@ -4,6 +4,7 @@ from fastapi.testclient import TestClient
 
 from test_atri.logs import clean_log_line, redact_log_line
 from test_atri.main import app
+from test_atri import reasoning
 
 
 client = TestClient(app)
@@ -83,6 +84,47 @@ def test_reasoning_r1_status_and_run_detail() -> None:
     ]
     assert len(body["memory_candidates"]) == 1
     assert body["memory_candidates"][0]["accepted"] == 0
+    assert body["schema_failures"] == []
+
+
+def test_reasoning_r1_schema_failure_is_auditable(monkeypatch) -> None:
+    original_builder = reasoning.build_deterministic_output
+
+    def build_invalid_output(run_id, event):
+        output = original_builder(run_id, event)
+        output["schema_version"] = "broken"
+        output["reply"] = {"should_reply": True}
+        return output
+
+    monkeypatch.setattr(reasoning, "build_deterministic_output", build_invalid_output)
+
+    response = client.post(
+        "/events/internal",
+        json={
+            "type": "user.command.submitted",
+            "source": "test",
+            "payload": {"text": "force schema failure"},
+        },
+    )
+
+    assert response.status_code == 200
+    events = response.json()["events"]
+    assert [event["type"] for event in events] == [
+        "reasoning.started",
+        "reasoning.schema.invalid",
+        "reasoning.failed",
+    ]
+
+    run_id = events[0]["payload"]["run_id"]
+    detail = client.get(f"/reasoning/runs/{run_id}")
+    assert detail.status_code == 200
+    body = detail.json()
+    assert body["run"]["status"] == "schema_failed"
+    assert "schema_version" in body["run"]["failure_summary"]
+    assert body["steps"][-1]["step_type"] == "schema_validating"
+    assert body["steps"][-1]["status"] == "failed"
+    assert len(body["schema_failures"]) >= 1
+    assert body["memory_candidates"] == []
 
 
 def test_log_redaction_masks_sensitive_values() -> None:

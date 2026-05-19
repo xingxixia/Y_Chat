@@ -314,7 +314,8 @@ def run_deterministic_reasoning(event: EventEnvelope) -> dict[str, Any]:
     created_at = now_iso()
     output = build_deterministic_output(run_id, event)
     validation_errors = validate_reasoning_output(output, run_id)
-    reply_text = str(output["reply"]["bubble_text"] or output["reply"]["text"])
+    reply = output.get("reply") if isinstance(output.get("reply"), dict) else {}
+    reply_text = str(reply.get("bubble_text") or reply.get("text") or "")
 
     with _connect() as db:
         db.execute(
@@ -580,10 +581,20 @@ def get_reasoning_run(run_id: str) -> dict[str, Any] | None:
             """,
             (run_id,),
         ).fetchall()
+        schema_failures = db.execute(
+            """
+            SELECT failure_id, run_id, error, created_at
+            FROM reasoning_schema_failures
+            WHERE run_id = ?
+            ORDER BY created_at ASC
+            """,
+            (run_id,),
+        ).fetchall()
 
     return {
         "run": dict(run),
         "steps": [dict(row) for row in steps],
+        "schema_failures": [dict(row) for row in schema_failures],
         "memory_candidates": [
             {
                 **dict(row),

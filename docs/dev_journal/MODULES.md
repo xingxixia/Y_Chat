@@ -241,6 +241,9 @@ Current R1 backend slice:
 - Deterministic fallback now builds a `reasoning.v1` output object, validates
   the required structure, records schema-validation state, and only then emits
   accepted reply/memory-candidate events.
+- Schema validation failures are stored in `reasoning_schema_failures`, exposed
+  in run detail, and shown in Debug. Failed schema output does not emit a normal
+  reply and does not create memory write candidates.
 - Records memory write candidates for Debug inspection only; they are not
   accepted as formal memory records.
 - Real model calls, schema repair, action execution, and automatic memory

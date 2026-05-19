@@ -547,3 +547,7 @@
   structure, records schema-validation state, and only then emits accepted
   reply/memory-candidate events. Schema repair and real provider output remain
   future work.
+- Added R1 schema-failure audit visibility: run detail now returns
+  `schema_failures`, Debug Reasoning shows schema failure records, and the
+  backend smoke check covers the invalid-output path to confirm failures do not
+  create memory write candidates.

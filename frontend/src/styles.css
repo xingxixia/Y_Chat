@@ -411,6 +411,15 @@ textarea {
   color: #3d7a58;
 }
 
+.reasoning-failure {
+  background: #fff1f1;
+  border-color: #c94545;
+}
+
+.reasoning-failure .debug-event-head strong {
+  color: #9f2525;
+}
+
 .debug-event-head {
   display: flex;
   justify-content: space-between;
