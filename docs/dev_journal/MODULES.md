@@ -311,6 +311,8 @@ Current thin slice:
   secrets.
 - `/logs/status` also cleans display-only log noise such as UTF-8 BOM, ANSI
   color escapes, and common UTF-8 mojibake before returning tails to Debug.
+- Reasoning page shows read-only Reasoning R1 status, recent runs, selected run
+  detail, steps, and memory candidates from `/reasoning/*` endpoints.
 - External, Voice, Screen, and VR/OSC pages show their current read-only
   capability permissions instead of blank placeholders.
 
@@ -320,8 +322,8 @@ Discussed future debug work:
 - Add permission/audit surfaces before sensitive capabilities are enabled.
 - Keep reserved module pages honest: show disabled state and requirements
   instead of pretending capabilities are active.
-- Add Debug Reasoning page for run/step/provider/schema/action/memory/audit
-  inspection.
+- Extend Debug Reasoning beyond the current R1 read-only view when schema
+  repair, action proposals, provider calls, and richer audit records exist.
 - Add provider config controls for API key input, provider switching, and model
   enable/disable. These controls require secondary confirmation and provider
   config audit.

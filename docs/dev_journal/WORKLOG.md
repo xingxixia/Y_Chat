@@ -538,3 +538,7 @@
 - Kept R1 within its documented boundary: no real model calls, no formal
   long-term memory writes, no broader action execution, and no dedicated Debug
   Reasoning page yet.
+- Added the first read-only Debug Reasoning page, backed by `/reasoning/status`
+  and `/reasoning/runs`, showing R1 status, recent runs, selected run steps, and
+  memory candidates without enabling provider configuration, model calls,
+  action execution, or memory acceptance.

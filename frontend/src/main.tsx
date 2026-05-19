@@ -66,6 +66,60 @@ type LogStatus = {
   logs: Array<{ name: string; kind: string; bytes: number; tail: string[] }>;
 };
 
+type ReasoningStatus = {
+  enabled: boolean;
+  provider: string;
+  real_model_calls: boolean;
+  runs_total: number;
+  queue: { foreground_active: boolean; background_pending: number };
+  current_run: ReasoningRunSummary | null;
+};
+
+type ReasoningRunSummary = {
+  run_id: string;
+  source_event_id?: string;
+  event_type?: string;
+  status: string;
+  depth: string;
+  provider: string;
+  created_at?: string;
+  updated_at: string;
+  reply_text?: string | null;
+  failure_summary?: string | null;
+};
+
+type ReasoningStep = {
+  step_id: string;
+  step_index: number;
+  step_type: string;
+  status: string;
+  summary: string;
+  created_at: string;
+};
+
+type ReasoningCandidate = {
+  candidate_id: string;
+  target_layer: string;
+  kind: string;
+  confidence: number;
+  accepted: number;
+  created_at: string;
+  payload?: Record<string, unknown>;
+};
+
+type ReasoningRunsResponse = {
+  runs: ReasoningRunSummary[];
+};
+
+type ReasoningRunDetail = {
+  run: ReasoningRunSummary;
+  steps: ReasoningStep[];
+  memory_candidates: ReasoningCandidate[];
+  actions: unknown[];
+  pending_actions: unknown[];
+  audit: unknown[];
+};
+
 const BUBBLE_SEGMENT_LENGTH = 44;
 const BUBBLE_SEGMENT_PAUSE_MS = 700;
 
@@ -546,11 +600,16 @@ function DebugWindow() {
   const memoryStatus = useJsonStatus<MemoryStatus>("/memory", refreshKey);
   const projectReaderStatus = useJsonStatus<ProjectReaderStatus>("/project-reader/status", refreshKey);
   const logStatus = useJsonStatus<LogStatus>("/logs/status", refreshKey);
+  const reasoningStatus = useJsonStatus<ReasoningStatus>("/reasoning/status", refreshKey);
+  const reasoningRuns = useJsonStatus<ReasoningRunsResponse>("/reasoning/runs", refreshKey);
   const [petState, setPetState] = useState("idle");
   const [events, setEvents] = useState<DebugEvent[]>([]);
+  const [selectedReasoningRunId, setSelectedReasoningRunId] = useState<string | null>(null);
+  const [reasoningRunDetail, setReasoningRunDetail] = useState<ReasoningRunDetail | null>(null);
   const navItems = useMemo(
     () => [
       "Overview",
+      "Reasoning",
       "Model",
       "Local Model",
       "Events",
@@ -576,6 +635,34 @@ function DebugWindow() {
       offEvents?.();
     };
   }, []);
+
+  useEffect(() => {
+    const firstRunId = reasoningRuns?.runs[0]?.run_id ?? null;
+    if (!selectedReasoningRunId && firstRunId) setSelectedReasoningRunId(firstRunId);
+    if (selectedReasoningRunId && !reasoningRuns?.runs.some((run) => run.run_id === selectedReasoningRunId)) {
+      setSelectedReasoningRunId(firstRunId);
+    }
+  }, [reasoningRuns, selectedReasoningRunId]);
+
+  useEffect(() => {
+    if (!selectedReasoningRunId) {
+      setReasoningRunDetail(null);
+      return;
+    }
+
+    let cancelled = false;
+    fetch(`http://127.0.0.1:18080/reasoning/runs/${selectedReasoningRunId}`)
+      .then((response) => response.json())
+      .then((data) => {
+        if (!cancelled) setReasoningRunDetail(data);
+      })
+      .catch(() => {
+        if (!cancelled) setReasoningRunDetail(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedReasoningRunId, refreshKey]);
 
   async function refreshDebugData() {
     setRefreshKey((value) => value + 1);
@@ -704,6 +791,77 @@ function DebugWindow() {
             <div><span>Configured</span><strong>{modelStatus?.configured ? "yes" : "no"}</strong></div>
             <div><span>Provider</span><strong>{modelStatus?.active_provider ?? "unavailable"}</strong></div>
             <div><span>Model</span><strong>{modelStatus?.model ?? "unavailable"}</strong></div>
+          </div>
+        </section>
+      );
+    }
+
+    if (activeView === "Reasoning") {
+      return (
+        <section className="debug-panel">
+          <h2>Reasoning</h2>
+          <div className="detail-grid">
+            <div><span>Enabled</span><strong>{reasoningStatus?.enabled ? "yes" : "no"}</strong></div>
+            <div><span>Provider</span><strong>{reasoningStatus?.provider ?? "unavailable"}</strong></div>
+            <div><span>Real model calls</span><strong>{reasoningStatus?.real_model_calls ? "yes" : "no"}</strong></div>
+            <div><span>Runs</span><strong>{reasoningStatus?.runs_total ?? 0}</strong></div>
+          </div>
+          <div className="reasoning-layout">
+            <div className="reasoning-run-list">
+              {reasoningRuns && reasoningRuns.runs.length > 0 ? (
+                reasoningRuns.runs.slice(0, 24).map((run) => (
+                  <button
+                    key={run.run_id}
+                    data-active={selectedReasoningRunId === run.run_id}
+                    onClick={() => setSelectedReasoningRunId(run.run_id)}
+                    type="button"
+                  >
+                    <strong>{run.status}</strong>
+                    <span>{run.depth} / {run.provider}</span>
+                    <small>{new Date(run.updated_at).toLocaleTimeString()}</small>
+                  </button>
+                ))
+              ) : (
+                <p className="debug-empty">No reasoning runs yet.</p>
+              )}
+            </div>
+            <div className="reasoning-detail">
+              {reasoningRunDetail ? (
+                <>
+                  <div className="debug-event-head">
+                    <strong>{reasoningRunDetail.run.run_id}</strong>
+                    <span>{reasoningRunDetail.run.event_type}</span>
+                  </div>
+                  <pre>{reasoningRunDetail.run.reply_text || "(no reply)"}</pre>
+                  <h3>Steps</h3>
+                  {reasoningRunDetail.steps.map((step) => (
+                    <article className="debug-event" key={step.step_id}>
+                      <div className="debug-event-head">
+                        <strong>{step.step_index}. {step.step_type}</strong>
+                        <span>{step.status}</span>
+                      </div>
+                      <pre>{step.summary}</pre>
+                    </article>
+                  ))}
+                  <h3>Memory Candidates</h3>
+                  {reasoningRunDetail.memory_candidates.length > 0 ? (
+                    reasoningRunDetail.memory_candidates.map((candidate) => (
+                      <article className="debug-event" key={candidate.candidate_id}>
+                        <div className="debug-event-head">
+                          <strong>{candidate.kind}</strong>
+                          <span>{candidate.accepted ? "accepted" : "inspect only"}</span>
+                        </div>
+                        <pre>{JSON.stringify(candidate.payload ?? {}, null, 2)}</pre>
+                      </article>
+                    ))
+                  ) : (
+                    <p className="debug-empty">No memory candidates.</p>
+                  )}
+                </>
+              ) : (
+                <p className="debug-empty">Select a reasoning run.</p>
+              )}
+            </div>
           </div>
         </section>
       );
