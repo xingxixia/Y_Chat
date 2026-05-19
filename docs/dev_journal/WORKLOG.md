@@ -599,3 +599,6 @@
   back to `y_chat` instead of exposing a local-only environment as the default.
 - Added `.editorconfig` to keep committed text files UTF-8 and reduce future
   BOM/line-ending drift.
+- User confirmed the final public license policy: code is Apache-2.0, while
+  branding and character/creative assets remain reserved unless explicitly
+  stated otherwise.

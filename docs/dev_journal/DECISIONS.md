@@ -11,6 +11,10 @@
 - Local private runtime config may keep a separate pet codename such as
   a private local name; do not treat that private codename as the public GitHub
   project name.
+- License policy is confirmed: source code uses Apache-2.0; branding,
+  character names, character likenesses, sprites, icons, screenshots, voice
+  designs, personality writing, and other creative assets remain reserved unless
+  a file explicitly grants rights.
 - Use Electron + Vite + React + Canvas frontend.
 - Use Python FastAPI backend. Scripts read `runtime/dev.local.ps1` first,
   then `Y_CHAT_CONDA_ENV`, then fall back to a neutral `y_chat` environment
