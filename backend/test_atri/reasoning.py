@@ -12,6 +12,7 @@ from .events import EventEnvelope, make_event
 
 DB_PATH = RUNTIME_DIR / "test_atri.sqlite3"
 PROVIDER_NAME = "deterministic_fallback"
+SCHEMA_VERSION = "reasoning.v1"
 
 
 def now_iso() -> str:
@@ -170,22 +171,10 @@ def _insert_step(
 def _insert_memory_candidate(
     db: sqlite3.Connection,
     run_id: str,
-    source_event_id: str,
-    text: str,
+    candidate: dict[str, Any],
 ) -> str:
-    candidate_id = str(uuid4())
-    payload = {
-        "candidate_id": candidate_id,
-        "target_layer": "short_term",
-        "kind": "task_state",
-        "content": {"text": text},
-        "source_event_ids": [source_event_id],
-        "reason": "R1 fallback records command input for Debug inspection only.",
-        "confidence": 0.4,
-        "importance": 0.2,
-        "review_required": True,
-        "accepted": False,
-    }
+    candidate_id = str(candidate["candidate_id"])
+    payload = {**candidate, "accepted": False}
     db.execute(
         """
         INSERT INTO memory_write_candidates (
@@ -199,7 +188,7 @@ def _insert_memory_candidate(
             run_id,
             payload["target_layer"],
             payload["kind"],
-            payload["confidence"],
+            float(payload["confidence"]),
             0,
             json.dumps(payload, ensure_ascii=True),
             now_iso(),
@@ -208,16 +197,124 @@ def _insert_memory_candidate(
     return candidate_id
 
 
-def run_deterministic_reasoning(event: EventEnvelope) -> dict[str, Any]:
-    ensure_reasoning_db()
+def _record_schema_failure(db: sqlite3.Connection, run_id: str, error: str) -> None:
+    db.execute(
+        """
+        INSERT INTO reasoning_schema_failures (failure_id, run_id, error, created_at)
+        VALUES (?, ?, ?, ?)
+        """,
+        (str(uuid4()), run_id, error, now_iso()),
+    )
 
-    run_id = str(uuid4())
-    created_at = now_iso()
+
+def build_deterministic_output(run_id: str, event: EventEnvelope) -> dict[str, Any]:
     text = str(event.payload.get("text", "")).strip()
     reply_text = (
         f"Received: {text}\n\n"
         "Reasoning R1 deterministic fallback handled this command."
     )
+    candidate_id = str(uuid4())
+    return {
+        "schema_version": SCHEMA_VERSION,
+        "run_id": run_id,
+        "reply": {
+            "should_reply": True,
+            "text": reply_text,
+            "bubble_text": reply_text,
+            "style": "normal",
+            "final": True,
+        },
+        "state": {
+            "pet_state": "talking",
+            "emotion": "neutral",
+            "animation": None,
+        },
+        "actions": [],
+        "memory": {
+            "write_candidates": [
+                {
+                    "candidate_id": candidate_id,
+                    "target_layer": "short_term",
+                    "kind": "task_state",
+                    "content": {"text": text},
+                    "related_entity_id": None,
+                    "source_event_ids": [event.event_id],
+                    "reason": "R1 fallback records command input for Debug inspection only.",
+                    "confidence": 0.4,
+                    "importance": 0.2,
+                    "review_required": True,
+                }
+            ],
+            "do_not_write_reason": None,
+            "needs_consolidation": False,
+        },
+        "observations": [],
+        "voice": {
+            "speak": False,
+            "text": None,
+            "voice_style": None,
+        },
+        "debug": {
+            "depth": "lightweight",
+            "needs_deep_retrieval": False,
+            "deep_retrieval_query": None,
+            "trace": [],
+        },
+        "audit": {
+            "safety_notes": ["deterministic fallback; real model not called"],
+            "permission_requests": [],
+        },
+    }
+
+
+def validate_reasoning_output(output: dict[str, Any], run_id: str) -> list[str]:
+    errors: list[str] = []
+    if output.get("schema_version") != SCHEMA_VERSION:
+        errors.append("schema_version must be reasoning.v1")
+    if output.get("run_id") != run_id:
+        errors.append("run_id mismatch")
+
+    reply = output.get("reply")
+    if not isinstance(reply, dict):
+        errors.append("reply must be an object")
+    else:
+        if not isinstance(reply.get("should_reply"), bool):
+            errors.append("reply.should_reply must be boolean")
+        if reply.get("should_reply") and not isinstance(reply.get("text"), str):
+            errors.append("reply.text must be string when should_reply is true")
+        if reply.get("final") is not True:
+            errors.append("reply.final must be true")
+
+    if not isinstance(output.get("actions"), list):
+        errors.append("actions must be a list")
+
+    memory = output.get("memory")
+    if not isinstance(memory, dict):
+        errors.append("memory must be an object")
+    elif not isinstance(memory.get("write_candidates"), list):
+        errors.append("memory.write_candidates must be a list")
+    else:
+        for index, candidate in enumerate(memory["write_candidates"]):
+            if not isinstance(candidate, dict):
+                errors.append(f"memory.write_candidates[{index}] must be an object")
+                continue
+            for field in ("candidate_id", "target_layer", "kind", "content", "source_event_ids", "confidence"):
+                if field not in candidate:
+                    errors.append(f"memory.write_candidates[{index}].{field} is required")
+            if "confidence" in candidate and not isinstance(candidate["confidence"], int | float):
+                errors.append(f"memory.write_candidates[{index}].confidence must be numeric")
+
+    return errors
+
+
+def run_deterministic_reasoning(event: EventEnvelope) -> dict[str, Any]:
+    ensure_reasoning_db()
+
+    run_id = str(uuid4())
+    created_at = now_iso()
+    output = build_deterministic_output(run_id, event)
+    validation_errors = validate_reasoning_output(output, run_id)
+    reply_text = str(output["reply"]["bubble_text"] or output["reply"]["text"])
 
     with _connect() as db:
         db.execute(
@@ -255,9 +352,60 @@ def run_deterministic_reasoning(event: EventEnvelope) -> dict[str, Any]:
             2,
             "deterministic_fallback",
             "completed",
-            "R1 produced a safe deterministic fallback reply.",
+            "R1 produced a safe deterministic fallback reasoning.v1 output.",
         )
-        candidate_id = _insert_memory_candidate(db, run_id, event.event_id, text)
+        schema_step_id = _insert_step(
+            db,
+            run_id,
+            3,
+            "schema_validating",
+            "completed" if not validation_errors else "failed",
+            "R1 validated deterministic fallback output against reasoning.v1.",
+        )
+        if validation_errors:
+            for error in validation_errors:
+                _record_schema_failure(db, run_id, error)
+            db.execute(
+                """
+                UPDATE reasoning_runs
+                SET status = ?, updated_at = ?, failure_summary = ?
+                WHERE run_id = ?
+                """,
+                ("schema_failed", now_iso(), "; ".join(validation_errors), run_id),
+            )
+            return {
+                "run_id": run_id,
+                "events": [
+                    make_event(
+                        "reasoning.started",
+                        "backend",
+                        {
+                            "run_id": run_id,
+                            "depth": "lightweight",
+                            "provider": PROVIDER_NAME,
+                            "source_event_id": event.event_id,
+                        },
+                        correlation_id=event.event_id,
+                    ).model_dump(),
+                    make_event(
+                        "reasoning.schema.invalid",
+                        "backend",
+                        {"run_id": run_id, "errors": validation_errors},
+                        correlation_id=event.event_id,
+                    ).model_dump(),
+                    make_event(
+                        "reasoning.failed",
+                        "backend",
+                        {"run_id": run_id, "reason": "schema_failed"},
+                        correlation_id=event.event_id,
+                    ).model_dump(),
+                ],
+            }
+
+        candidate_ids = [
+            _insert_memory_candidate(db, run_id, candidate)
+            for candidate in output["memory"]["write_candidates"]
+        ]
         updated_at = now_iso()
         db.execute(
             """
@@ -313,13 +461,24 @@ def run_deterministic_reasoning(event: EventEnvelope) -> dict[str, Any]:
             correlation_id=event.event_id,
         ),
         make_event(
+            "reasoning.step.completed",
+            "backend",
+            {
+                "run_id": run_id,
+                "step_id": schema_step_id,
+                "step_type": "schema_validating",
+                "status": "completed",
+            },
+            correlation_id=event.event_id,
+        ),
+        make_event(
             "reasoning.output.produced",
             "backend",
             {
                 "run_id": run_id,
-                "schema_version": "reasoning.v1",
+                "schema_version": SCHEMA_VERSION,
                 "provider": PROVIDER_NAME,
-                "memory_candidate_ids": [candidate_id],
+                "memory_candidate_ids": candidate_ids,
             },
             correlation_id=event.event_id,
         ),

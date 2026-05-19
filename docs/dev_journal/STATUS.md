@@ -249,6 +249,9 @@ Resolved on 2026-05-18:
 - Debug Window now includes a read-only Reasoning page for R1 status, recent
   runs, selected run steps, and memory candidates. It does not configure
   providers, enable model calls, execute actions, or accept memory writes.
+- Reasoning R1 now builds and validates a `reasoning.v1` structured output
+  object before emitting accepted reply and memory-candidate events. Schema
+  repair and real provider output remain future slices.
 - Project Reader thin slice is added: status and gated top-level listing
   endpoints exist, but reading is disabled by default and no roots are
   authorized.

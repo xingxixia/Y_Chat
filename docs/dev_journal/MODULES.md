@@ -238,10 +238,13 @@ Current R1 backend slice:
   instead of the older direct placeholder bubble path.
 - Emits `reasoning.started`, `reasoning.step.completed`, and
   `reasoning.output.produced` before the normal state and bubble events.
+- Deterministic fallback now builds a `reasoning.v1` output object, validates
+  the required structure, records schema-validation state, and only then emits
+  accepted reply/memory-candidate events.
 - Records memory write candidates for Debug inspection only; they are not
   accepted as formal memory records.
-- Real model calls, action execution, and the dedicated Debug Reasoning page are
-  still future slices.
+- Real model calls, schema repair, action execution, and automatic memory
+  acceptance are still future slices.
 
 Accepted full implementation route:
 

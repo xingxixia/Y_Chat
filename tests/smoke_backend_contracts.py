@@ -43,6 +43,7 @@ def main() -> None:
             "pet.state.changed",
             "reasoning.step.completed",
             "reasoning.step.completed",
+            "reasoning.step.completed",
             "reasoning.output.produced",
             "pet.bubble.show",
             "pet.state.changed",

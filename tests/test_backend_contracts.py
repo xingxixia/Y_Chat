@@ -31,11 +31,13 @@ def test_internal_event_command_flow() -> None:
         "pet.state.changed",
         "reasoning.step.completed",
         "reasoning.step.completed",
+        "reasoning.step.completed",
         "reasoning.output.produced",
         "pet.bubble.show",
         "pet.state.changed",
     ]
-    assert "deterministic fallback" in response.json()["events"][5]["payload"]["text"]
+    assert response.json()["events"][4]["payload"]["step_type"] == "schema_validating"
+    assert "deterministic fallback" in response.json()["events"][6]["payload"]["text"]
 
 
 def test_model_provider_status_is_disabled_by_default() -> None:
@@ -74,7 +76,11 @@ def test_reasoning_r1_status_and_run_detail() -> None:
     assert detail.status_code == 200
     body = detail.json()
     assert body["run"]["run_id"] == run_id
-    assert len(body["steps"]) >= 2
+    assert [step["step_type"] for step in body["steps"][:3]] == [
+        "context_check",
+        "deterministic_fallback",
+        "schema_validating",
+    ]
     assert len(body["memory_candidates"]) == 1
     assert body["memory_candidates"][0]["accepted"] == 0
 

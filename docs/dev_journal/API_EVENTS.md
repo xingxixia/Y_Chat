@@ -171,8 +171,9 @@ Current Reasoning R1 implementation:
   `GET /reasoning/runs/{run_id}` exist as read-only Debug endpoints.
 - `user.command.submitted` creates a deterministic fallback run with provider
   `deterministic_fallback`.
-- R1 records run and step trace, plus non-accepted memory write candidates for
-  inspection.
+- R1 builds a `reasoning.v1` output object, validates its required structure,
+  records schema-validation state, and stores non-accepted memory write
+  candidates for inspection.
 - R1 does not call real models, write formal long-term memory, or execute
   broader actions.
 

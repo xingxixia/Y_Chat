@@ -542,3 +542,8 @@
   and `/reasoning/runs`, showing R1 status, recent runs, selected run steps, and
   memory candidates without enabling provider configuration, model calls,
   action execution, or memory acceptance.
+- Added a Reasoning R1 structured-output validation shell: deterministic
+  fallback now builds a `reasoning.v1` output object, validates required
+  structure, records schema-validation state, and only then emits accepted
+  reply/memory-candidate events. Schema repair and real provider output remain
+  future work.
