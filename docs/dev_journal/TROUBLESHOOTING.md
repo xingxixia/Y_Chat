@@ -43,6 +43,10 @@ has not reloaded the latest source. Restart with `scripts/stop_dev.ps1` and
 
 Do not assume `uvicorn reload=True` picked up every edit on Windows.
 
+PowerShell may display a valid UTF-8 character such as the Vite `➜` arrow as
+mojibake in command output. If the API appears garbled, inspect HTTP response
+bytes or Unicode codepoints before treating it as an application bug.
+
 ## Black or Blank Window
 
 Check:

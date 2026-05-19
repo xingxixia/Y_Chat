@@ -572,3 +572,10 @@
 - Added safer Project Reader status visibility: `/project-reader/status` and
   Debug Project Read now show per-root existence/listability metadata and
   explicitly report that file-content reading is disabled.
+- Added read-only Debug History status via Electron IPC: file path, byte size,
+  persisted line count, configured history limits, loaded event count, and
+  recent event types are visible without adding any clear/delete/write action.
+- Investigated apparent Vite arrow mojibake in `/logs/status`. Direct HTTP byte
+  and Unicode-codepoint checks showed the API returns valid UTF-8 `➜`; the
+  visible mojibake was from PowerShell display decoding, so
+  `TROUBLESHOOTING.md` now records that check.

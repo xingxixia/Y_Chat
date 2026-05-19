@@ -14,6 +14,7 @@ declare global {
       dragPetWindow: () => Promise<void>;
       endPetWindowDrag: () => Promise<void>;
       notifyPetClicked: () => Promise<void>;
+      getEventHistoryStatus: () => Promise<EventHistoryStatus>;
       onBubbleText: (handler: (text: string) => void) => () => void;
       onBubbleInterrupt: (handler: () => void) => () => void;
       onPetState: (handler: (state: string) => void) => () => void;
@@ -31,6 +32,18 @@ type DebugEvent = {
   timestamp?: string;
   correlation_id?: string | null;
   payload?: Record<string, unknown>;
+};
+
+type EventHistoryStatus = {
+  path: string;
+  exists: boolean;
+  bytes: number;
+  persisted_limit: number;
+  recent_limit: number;
+  total_lines: number;
+  recent_loaded: number;
+  recent_types: string[];
+  error?: string;
 };
 
 type CommandSubmitResult = {
@@ -665,6 +678,7 @@ function DebugWindow() {
   const reasoningRuns = useJsonStatus<ReasoningRunsResponse>("/reasoning/runs", refreshKey);
   const [petState, setPetState] = useState("idle");
   const [events, setEvents] = useState<DebugEvent[]>([]);
+  const [eventHistoryStatus, setEventHistoryStatus] = useState<EventHistoryStatus | null>(null);
   const [selectedReasoningRunId, setSelectedReasoningRunId] = useState<string | null>(null);
   const [reasoningRunDetail, setReasoningRunDetail] = useState<ReasoningRunDetail | null>(null);
   const navItems = useMemo(
@@ -696,6 +710,20 @@ function DebugWindow() {
       offEvents?.();
     };
   }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    window.testAtri?.getEventHistoryStatus()
+      .then((status) => {
+        if (!cancelled) setEventHistoryStatus(status);
+      })
+      .catch(() => {
+        if (!cancelled) setEventHistoryStatus(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [refreshKey, events.length]);
 
   useEffect(() => {
     const firstRunId = reasoningRuns?.runs[0]?.run_id ?? null;
@@ -1140,6 +1168,33 @@ function DebugWindow() {
       return (
         <section className="debug-panel">
           <h2>History</h2>
+          <div className="detail-grid">
+            <div><span>Persisted</span><strong>{eventHistoryStatus?.exists ? "yes" : "no"}</strong></div>
+            <div><span>File bytes</span><strong>{eventHistoryStatus?.bytes ?? 0}</strong></div>
+            <div><span>Lines</span><strong>{eventHistoryStatus?.total_lines ?? 0}</strong></div>
+            <div><span>Loaded</span><strong>{eventHistoryStatus?.recent_loaded ?? events.length}</strong></div>
+            <div><span>Recent limit</span><strong>{eventHistoryStatus?.recent_limit ?? 80}</strong></div>
+            <div><span>Persisted limit</span><strong>{eventHistoryStatus?.persisted_limit ?? 500}</strong></div>
+          </div>
+          {eventHistoryStatus?.error ? (
+            <article className="debug-event reasoning-failure">
+              <div className="debug-event-head">
+                <strong>History Read Error</strong>
+                <span>diagnostic only</span>
+              </div>
+              <pre>{eventHistoryStatus.error}</pre>
+            </article>
+          ) : null}
+          <pre className="debug-code">
+            {JSON.stringify(
+              {
+                path: eventHistoryStatus?.path,
+                recent_types: eventHistoryStatus?.recent_types ?? []
+              },
+              null,
+              2
+            )}
+          </pre>
           <div className="timeline-list">
             {events.length > 0 ? (
               events.slice(0, 32).map((event) => (

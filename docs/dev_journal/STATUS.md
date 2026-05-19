@@ -274,6 +274,8 @@ Resolved on 2026-05-18:
   read-only Debug Window permission list.
 - Debug Window module status slice is added: it shows read-only Model Provider,
   Memory, and Project Reader status.
+- Debug History now shows read-only local event-history file status through
+  Electron IPC, including file size, line count, limits, and recent event types.
 - Model Provider read-only config view is added: `/model/provider/config` and
   Debug Model show masked key state, provider settings, and enablement gates
   without saving keys or making real model calls.

@@ -312,6 +312,10 @@ Rules:
 - Electron trims the file to the latest 500 events.
 - A local `system.hello` event is written when Electron starts, which makes a
   fresh app session visible in Debug History.
+- Debug History can read local event-history status through Electron IPC:
+  history file path, byte size, line count, configured limits, loaded event
+  count, and recent event types. This is read-only and does not clear or write
+  history.
 
 ## Bubble Event Rule
 

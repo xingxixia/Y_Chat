@@ -34,6 +34,7 @@ contextBridge.exposeInMainWorld("testAtri", {
     ipcRenderer.on("debug:state", listener);
     return () => ipcRenderer.removeListener("debug:state", listener);
   },
+  getEventHistoryStatus: () => ipcRenderer.invoke("debug:event-history-status"),
   onCommandFocus: (handler) => {
     ipcRenderer.on("command:focus", handler);
     return () => ipcRenderer.removeListener("command:focus", handler);

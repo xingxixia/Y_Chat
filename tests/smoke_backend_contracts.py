@@ -219,6 +219,7 @@ def main() -> None:
                 "\x1b",
                 f"[32m{mojibake_arrow}",
                 "[39m Local",
+                "\x1b[32m\u9253?\x1b[39m  Local",
             ]
         ),
         encoding="utf-8",
@@ -233,7 +234,7 @@ def main() -> None:
     for secret in ("sk-secret-value", "deepseek-secret", "abc123456789", "hunter2"):
         if secret in redaction_tail:
             raise AssertionError(f"log redaction leaked {secret!r}: {redaction_tail!r}")
-    for noise in ("\x1b", "[32m", "[39m"):
+    for noise in ("\x1b", "[32m", "[39m", "\u9253?"):
         if noise in redaction_tail:
             raise AssertionError(f"log cleanup leaked {noise!r}: {redaction_tail!r}")
 

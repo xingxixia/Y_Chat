@@ -15,6 +15,11 @@ ANSI_FRAGMENT_RE = re.compile(r"^\[[0-?]*[ -/]*[@-~]\s*")
 ANSI_START_RE = re.compile(r"\x1b.*$")
 CONTROL_CHAR_RE = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f-\x9f]")
 MOJIBAKE_MARKERS = ("\u00c3", "\u00c2", "\u00e2", "\u00ef\u00bb\u00bf")
+COMMON_DISPLAY_FIXES = {
+    "\u00e2\u009e\u009c": "\u279c",
+    "\u9253?": "\u279c",
+    "\ufffd": "",
+}
 SENSITIVE_ASSIGNMENT_RE = re.compile(
     r"(?i)([\"']?\b(api[_-]?key|x-api-key|token|access[_-]?token|refresh[_-]?token|secret|password)\b[\"']?)"
     r"(\s*[:=]\s*)"
@@ -36,9 +41,15 @@ def clean_log_line(line: str) -> str:
     except UnicodeError:
         pass
 
+    for bad, fixed in COMMON_DISPLAY_FIXES.items():
+        cleaned = cleaned.replace(bad, fixed)
+
     cleaned = ANSI_ESCAPE_RE.sub("", cleaned)
     cleaned = ANSI_START_RE.sub("", cleaned)
     cleaned = ANSI_FRAGMENT_RE.sub("", cleaned)
+    for bad, fixed in COMMON_DISPLAY_FIXES.items():
+        cleaned = cleaned.replace(bad, fixed)
+
     return CONTROL_CHAR_RE.sub("", cleaned)
 
 

@@ -157,6 +157,9 @@ Current thin slice:
   diagnostic file is trimmed to the latest 500 events.
 - Electron emits a local `system.hello` event on startup so a fresh session is
   visible in History even before the user submits a command.
+- Debug History can inspect event-history file status through read-only
+  Electron IPC: path, byte size, persisted line count, configured limits, loaded
+  event count, and recent event types.
 
 Discussed future event work:
 

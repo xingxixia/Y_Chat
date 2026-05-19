@@ -100,6 +100,59 @@ function trimPersistedEvents() {
   }
 }
 
+function eventHistoryStatus() {
+  try {
+    if (!fs.existsSync(EVENT_HISTORY_FILE)) {
+      return {
+        path: EVENT_HISTORY_FILE,
+        exists: false,
+        bytes: 0,
+        persisted_limit: PERSISTED_EVENT_LIMIT,
+        recent_limit: RECENT_EVENT_LIMIT,
+        total_lines: 0,
+        recent_loaded: recentEvents.length,
+        recent_types: []
+      };
+    }
+
+    const stat = fs.statSync(EVENT_HISTORY_FILE);
+    const lines = fs.readFileSync(EVENT_HISTORY_FILE, "utf8").split(/\r?\n/).filter(Boolean);
+    const recentTypes = lines
+      .slice(-10)
+      .map((line) => {
+        try {
+          return JSON.parse(line)?.type || "unknown";
+        } catch {
+          return "invalid";
+        }
+      })
+      .reverse();
+
+    return {
+      path: EVENT_HISTORY_FILE,
+      exists: true,
+      bytes: stat.size,
+      persisted_limit: PERSISTED_EVENT_LIMIT,
+      recent_limit: RECENT_EVENT_LIMIT,
+      total_lines: lines.length,
+      recent_loaded: recentEvents.length,
+      recent_types: recentTypes
+    };
+  } catch (error) {
+    return {
+      path: EVENT_HISTORY_FILE,
+      exists: fs.existsSync(EVENT_HISTORY_FILE),
+      bytes: 0,
+      persisted_limit: PERSISTED_EVENT_LIMIT,
+      recent_limit: RECENT_EVENT_LIMIT,
+      total_lines: 0,
+      recent_loaded: recentEvents.length,
+      recent_types: [],
+      error: error instanceof Error ? error.message : String(error)
+    };
+  }
+}
+
 function persistEvent(event) {
   try {
     fs.mkdirSync(RUNTIME_DIR, { recursive: true });
@@ -407,6 +460,10 @@ ipcMain.handle("pet:end-drag-window", () => {
 
 ipcMain.handle("pet:model-clicked", () => {
   return makeEvent("pet.model.clicked", "frontend", {});
+});
+
+ipcMain.handle("debug:event-history-status", () => {
+  return eventHistoryStatus();
 });
 
 app.on("window-all-closed", (event) => {

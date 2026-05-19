@@ -276,3 +276,4 @@ def test_log_cleanup_removes_bom_ansi_and_common_mojibake() -> None:
     assert clean_log_line("\x1b") == ""
     assert clean_log_line("[32m" + mojibake_arrow) == "\u279c"
     assert clean_log_line("[39m Local") == "Local"
+    assert clean_log_line("\x1b[32m\u9253?\x1b[39m  Local") == "\u279c  Local"
