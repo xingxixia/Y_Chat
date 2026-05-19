@@ -239,6 +239,14 @@ def main() -> None:
 
     project_reader = client.get("/project-reader/files")
     assert_equal(project_reader.status_code, 403, "project reader default denial")
+    project_reader_status = client.get("/project-reader/status")
+    assert_equal(project_reader_status.status_code, 200, "project reader status")
+    assert_equal(project_reader_status.json()["enabled"], False, "project reader enabled")
+    assert_equal(
+        project_reader_status.json()["content_reading_enabled"],
+        False,
+        "project reader content reading",
+    )
 
     memory = client.get("/memory")
     assert_equal(memory.status_code, 200, "memory status")

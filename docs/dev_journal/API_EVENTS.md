@@ -146,6 +146,8 @@ GET /project-reader/files
 
 `GET /project-reader/status` reports whether project reading is enabled, which
 roots are authorized, and which text extensions may be read later.
+It also reports per-root existence/listability metadata and
+`content_reading_enabled: false` while file-content reads remain unimplemented.
 `GET /project-reader/files` lists only the top level of an authorized root and
 is blocked unless `permissions.project.read` is enabled.
 

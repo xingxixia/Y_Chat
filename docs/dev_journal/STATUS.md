@@ -268,6 +268,8 @@ Resolved on 2026-05-18:
 - Project Reader thin slice is added: status and gated top-level listing
   endpoints exist, but reading is disabled by default and no roots are
   authorized.
+- Project Reader status now shows per-root existence/listability metadata and
+  explicitly marks content reading disabled.
 - Permission Manager thin slice is added: `GET /permissions/status` and a
   read-only Debug Window permission list.
 - Debug Window module status slice is added: it shows read-only Model Provider,

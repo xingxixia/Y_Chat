@@ -569,3 +569,6 @@
   Debug Model now expose active provider, model/base URL, stream settings,
   enablement gates, and masked key state without returning clear-text API keys
   or enabling real model calls.
+- Added safer Project Reader status visibility: `/project-reader/status` and
+  Debug Project Read now show per-root existence/listability metadata and
+  explicitly report that file-content reading is disabled.

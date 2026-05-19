@@ -24,10 +24,26 @@ def allowed_roots() -> list[Path]:
 
 def status_payload() -> dict[str, Any]:
     roots = allowed_roots()
+    enabled = project_read_enabled()
+    root_items = []
+    for index, root in enumerate(roots):
+        exists = root.exists()
+        is_dir = root.is_dir() if exists else False
+        root_items.append(
+            {
+                "index": index,
+                "path": str(root),
+                "exists": exists,
+                "is_dir": is_dir,
+                "listing_allowed": enabled and exists and is_dir,
+            }
+        )
     return {
-        "enabled": project_read_enabled(),
+        "enabled": enabled,
         "allowed_roots": [str(root) for root in roots],
+        "roots": root_items,
         "text_extensions": sorted(TEXT_EXTENSIONS),
+        "content_reading_enabled": False,
     }
 
 

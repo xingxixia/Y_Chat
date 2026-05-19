@@ -493,6 +493,8 @@ whitelist files.
 Current thin slice:
 
 - Added status endpoint and top-level file listing endpoint.
+- Status now includes per-root existence/listability metadata and explicitly
+  reports `content_reading_enabled: false`.
 - Default permission remains `permissions.project.read: false`.
 - Default `project_reader.allowed_roots` is empty.
 - File listing is blocked unless project reading is enabled and a root is

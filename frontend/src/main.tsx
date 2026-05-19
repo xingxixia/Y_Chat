@@ -79,7 +79,15 @@ type MemoryStatus = {
 type ProjectReaderStatus = {
   enabled: boolean;
   allowed_roots: string[];
+  roots?: Array<{
+    index: number;
+    path: string;
+    exists: boolean;
+    is_dir: boolean;
+    listing_allowed: boolean;
+  }>;
   text_extensions: string[];
+  content_reading_enabled?: boolean;
 };
 
 type LogStatus = {
@@ -1080,10 +1088,23 @@ function DebugWindow() {
             <div><span>Enabled</span><strong>{projectReaderStatus?.enabled ? "yes" : "no"}</strong></div>
             <div><span>Authorized roots</span><strong>{projectReaderStatus?.allowed_roots.length ?? 0}</strong></div>
             <div><span>Text types</span><strong>{projectReaderStatus?.text_extensions.length ?? 0}</strong></div>
+            <div><span>Content reads</span><strong>{projectReaderStatus?.content_reading_enabled ? "enabled" : "disabled"}</strong></div>
           </div>
-          <pre className="debug-code">
-            {JSON.stringify(projectReaderStatus?.allowed_roots ?? [], null, 2)}
-          </pre>
+          <div className="debug-event-list">
+            {projectReaderStatus?.roots && projectReaderStatus.roots.length > 0 ? (
+              projectReaderStatus.roots.map((root) => (
+                <article className="debug-event" key={root.index}>
+                  <div className="debug-event-head">
+                    <strong>Root {root.index}</strong>
+                    <span>{root.listing_allowed ? "listable" : "blocked"}</span>
+                  </div>
+                  <pre>{JSON.stringify(root, null, 2)}</pre>
+                </article>
+              ))
+            ) : (
+              <p className="debug-empty">No authorized roots configured.</p>
+            )}
+          </div>
         </section>
       );
     }

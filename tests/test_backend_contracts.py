@@ -61,6 +61,12 @@ def test_model_provider_config_is_read_only_and_masked() -> None:
 
 
 def test_project_reader_is_blocked_by_default() -> None:
+    status = client.get("/project-reader/status")
+    assert status.status_code == 200
+    assert status.json()["enabled"] is False
+    assert status.json()["content_reading_enabled"] is False
+    assert status.json()["roots"] == []
+
     response = client.get("/project-reader/files")
     assert response.status_code == 403
 
