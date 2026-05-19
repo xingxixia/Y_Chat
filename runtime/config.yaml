@@ -1,0 +1,49 @@
+app:
+  name: test atri
+  machine_name: test_atri
+
+backend:
+  host: 127.0.0.1
+  port: 18080
+  lan_enabled: false
+
+frontend:
+  vite_port: 5173
+  pixel_scale: 3
+  typewriter_chars_per_second: 36
+
+permissions:
+  model.call: false
+  memory.write: true
+  project.read: false
+  voice.listen: false
+  voice.speak: false
+  screen.observe: false
+  external.http: false
+  external.websocket: false
+  external.lan: false
+  external.osc: false
+  files.write: false
+  process.run: false
+  input.control: false
+  vr.output: false
+
+llm:
+  enabled: false
+  active_provider: deepseek
+  providers:
+    deepseek:
+      base_url: https://api.deepseek.com
+      api_key: ""
+      model: deepseek-chat
+      temperature: 0.7
+      stream: true
+    openai_compatible:
+      base_url: http://127.0.0.1:11434/v1
+      api_key: ""
+      model: ""
+      temperature: 0.7
+      stream: true
+
+project_reader:
+  allowed_roots: []
