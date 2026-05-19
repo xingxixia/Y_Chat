@@ -85,6 +85,10 @@ def test_reasoning_r1_status_and_run_detail() -> None:
     assert len(body["memory_candidates"]) == 1
     assert body["memory_candidates"][0]["accepted"] == 0
     assert body["schema_failures"] == []
+    assert len(body["audit"]) == 1
+    assert body["audit"][0]["kind"] == "memory_write"
+    assert body["audit"][0]["status"] == "candidate_recorded"
+    assert body["audit"][0]["payload"]["accepted"] is False
 
 
 def test_reasoning_r1_schema_failure_is_auditable(monkeypatch) -> None:
@@ -125,6 +129,7 @@ def test_reasoning_r1_schema_failure_is_auditable(monkeypatch) -> None:
     assert body["steps"][-1]["status"] == "failed"
     assert len(body["schema_failures"]) >= 1
     assert body["memory_candidates"] == []
+    assert body["audit"] == []
 
 
 def test_log_redaction_masks_sensitive_values() -> None:

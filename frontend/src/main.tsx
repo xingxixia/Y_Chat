@@ -114,6 +114,15 @@ type ReasoningSchemaFailure = {
   created_at: string;
 };
 
+type ReasoningAuditRecord = {
+  audit_id: string;
+  kind: string;
+  status: string;
+  created_at: string;
+  candidate_id?: string | null;
+  payload?: Record<string, unknown>;
+};
+
 type ReasoningRunsResponse = {
   runs: ReasoningRunSummary[];
 };
@@ -125,7 +134,7 @@ type ReasoningRunDetail = {
   memory_candidates: ReasoningCandidate[];
   actions: unknown[];
   pending_actions: unknown[];
-  audit: unknown[];
+  audit: ReasoningAuditRecord[];
 };
 
 const BUBBLE_SEGMENT_LENGTH = 44;
@@ -886,6 +895,20 @@ function DebugWindow() {
                     ))
                   ) : (
                     <p className="debug-empty">No memory candidates.</p>
+                  )}
+                  <h3>Audit</h3>
+                  {reasoningRunDetail.audit.length > 0 ? (
+                    reasoningRunDetail.audit.map((record) => (
+                      <article className="debug-event" key={record.audit_id}>
+                        <div className="debug-event-head">
+                          <strong>{record.kind}</strong>
+                          <span>{record.status}</span>
+                        </div>
+                        <pre>{JSON.stringify(record.payload ?? {}, null, 2)}</pre>
+                      </article>
+                    ))
+                  ) : (
+                    <p className="debug-empty">No audit records.</p>
                   )}
                 </>
               ) : (

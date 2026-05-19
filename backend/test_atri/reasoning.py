@@ -197,6 +197,39 @@ def _insert_memory_candidate(
     return candidate_id
 
 
+def _record_memory_write_audit(
+    db: sqlite3.Connection,
+    run_id: str,
+    candidate: dict[str, Any],
+    status: str,
+) -> None:
+    payload = {
+        "candidate_id": candidate["candidate_id"],
+        "target_layer": candidate["target_layer"],
+        "kind": candidate["kind"],
+        "accepted": False,
+        "status": status,
+        "reason": candidate.get("reason"),
+        "review_required": candidate.get("review_required", True),
+    }
+    db.execute(
+        """
+        INSERT INTO memory_write_audit (
+            audit_id, run_id, candidate_id, status, payload_json, created_at
+        )
+        VALUES (?, ?, ?, ?, ?, ?)
+        """,
+        (
+            str(uuid4()),
+            run_id,
+            str(candidate["candidate_id"]),
+            status,
+            json.dumps(payload, ensure_ascii=True),
+            now_iso(),
+        ),
+    )
+
+
 def _record_schema_failure(db: sqlite3.Connection, run_id: str, error: str) -> None:
     db.execute(
         """
@@ -403,10 +436,11 @@ def run_deterministic_reasoning(event: EventEnvelope) -> dict[str, Any]:
                 ],
             }
 
-        candidate_ids = [
-            _insert_memory_candidate(db, run_id, candidate)
-            for candidate in output["memory"]["write_candidates"]
-        ]
+        candidate_ids = []
+        for candidate in output["memory"]["write_candidates"]:
+            candidate_id = _insert_memory_candidate(db, run_id, candidate)
+            _record_memory_write_audit(db, run_id, candidate, "candidate_recorded")
+            candidate_ids.append(candidate_id)
         updated_at = now_iso()
         db.execute(
             """
@@ -590,6 +624,15 @@ def get_reasoning_run(run_id: str) -> dict[str, Any] | None:
             """,
             (run_id,),
         ).fetchall()
+        memory_audit = db.execute(
+            """
+            SELECT audit_id, run_id, candidate_id, status, payload_json, created_at
+            FROM memory_write_audit
+            WHERE run_id = ?
+            ORDER BY created_at ASC
+            """,
+            (run_id,),
+        ).fetchall()
 
     return {
         "run": dict(run),
@@ -605,5 +648,13 @@ def get_reasoning_run(run_id: str) -> dict[str, Any] | None:
         ],
         "actions": [],
         "pending_actions": [],
-        "audit": [],
+        "audit": [
+            {
+                "kind": "memory_write",
+                **dict(row),
+                "payload": json.loads(row["payload_json"]),
+                "payload_json": None,
+            }
+            for row in memory_audit
+        ],
     }

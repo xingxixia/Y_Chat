@@ -63,6 +63,12 @@ def main() -> None:
     assert_equal(reasoning_detail.status_code, 200, "reasoning detail")
     assert_equal(reasoning_detail.json()["run"]["run_id"], run_id, "reasoning run id")
     assert_equal(reasoning_detail.json()["schema_failures"], [], "reasoning schema failures")
+    assert_equal(len(reasoning_detail.json()["audit"]), 1, "reasoning memory audit count")
+    assert_equal(
+        reasoning_detail.json()["audit"][0]["status"],
+        "candidate_recorded",
+        "reasoning memory audit status",
+    )
 
     original_builder = reasoning.build_deterministic_output
 
@@ -93,6 +99,7 @@ def main() -> None:
     assert_equal(failure_detail.status_code, 200, "schema failure detail")
     assert_equal(failure_detail.json()["run"]["status"], "schema_failed", "schema failure run status")
     assert_equal(len(failure_detail.json()["memory_candidates"]), 0, "schema failure memory writes")
+    assert_equal(failure_detail.json()["audit"], [], "schema failure audit writes")
     if len(failure_detail.json()["schema_failures"]) < 1:
         raise AssertionError("schema failure detail did not expose schema_failures")
 

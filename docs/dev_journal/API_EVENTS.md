@@ -174,6 +174,9 @@ Current Reasoning R1 implementation:
 - R1 builds a `reasoning.v1` output object, validates its required structure,
   records schema-validation state, and stores non-accepted memory write
   candidates for inspection.
+- Successful R1 memory candidates create `memory_write_audit` records with
+  status `candidate_recorded`. These audit rows explain candidate creation only;
+  they do not mean the candidate has been accepted into formal memory.
 - If R1 schema validation fails, the run is marked `schema_failed`,
   `reasoning.schema.invalid` and `reasoning.failed` are emitted, schema errors
   are available from `GET /reasoning/runs/{run_id}`, and no memory candidates

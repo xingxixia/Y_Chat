@@ -246,6 +246,9 @@ Current R1 backend slice:
   reply and does not create memory write candidates.
 - Records memory write candidates for Debug inspection only; they are not
   accepted as formal memory records.
+- Records a `memory_write_audit` entry when an R1 memory candidate is produced,
+  so Debug can show why a candidate exists without treating it as accepted
+  memory.
 - Real model calls, schema repair, action execution, and automatic memory
   acceptance are still future slices.
 
@@ -318,7 +321,8 @@ Current thin slice:
 - `/logs/status` also cleans display-only log noise such as UTF-8 BOM, ANSI
   color escapes, and common UTF-8 mojibake before returning tails to Debug.
 - Reasoning page shows read-only Reasoning R1 status, recent runs, selected run
-  detail, steps, and memory candidates from `/reasoning/*` endpoints.
+  detail, steps, schema failures, memory candidates, and memory-candidate audit
+  records from `/reasoning/*` endpoints.
 - External, Voice, Screen, and VR/OSC pages show their current read-only
   capability permissions instead of blank placeholders.
 

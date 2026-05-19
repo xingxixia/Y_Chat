@@ -255,6 +255,9 @@ Resolved on 2026-05-18:
 - Reasoning R1 schema failures are now auditable through run detail and visible
   in Debug Reasoning. Invalid structured output emits failure events and does
   not create memory write candidates.
+- Reasoning R1 now records memory-candidate creation audit rows
+  (`candidate_recorded`) and exposes them in Debug Reasoning. This is still
+  inspect-only and does not accept or write formal memory.
 - Project Reader thin slice is added: status and gated top-level listing
   endpoints exist, but reading is disabled by default and no roots are
   authorized.

@@ -551,3 +551,7 @@
   `schema_failures`, Debug Reasoning shows schema failure records, and the
   backend smoke check covers the invalid-output path to confirm failures do not
   create memory write candidates.
+- Added R1 memory-candidate audit visibility: successful deterministic fallback
+  runs now store a `memory_write_audit` row with status `candidate_recorded`,
+  run detail returns it, and Debug Reasoning displays it as inspect-only audit
+  rather than accepted memory.
