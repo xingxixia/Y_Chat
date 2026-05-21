@@ -1,97 +1,60 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
 from typing import Any
 
-from .config import load_config
-
-
-@dataclass(frozen=True)
-class ModelProviderConfig:
-    enabled: bool
-    active_provider: str
-    model: str
-    configured: bool
-
-
-def mask_secret(value: str) -> str:
-    secret = value.strip()
-    if not secret:
-        return ""
-    if len(secret) <= 8:
-        return "*" * len(secret)
-    return f"{secret[:3]}...{secret[-4:]}"
+from .config import CONFIG_PATH, load_config, save_config
+from .provider_client import extract_message_content, post_chat_completion
+from .services.model_provider_runtime import (
+    ModelProviderConfig,
+    active_provider_call_config as service_active_provider_call_config,
+    get_model_provider_config as service_get_model_provider_config,
+    provider_config_payload as service_provider_config_payload,
+    provider_readiness_payload as service_provider_readiness_payload,
+    provider_status_payload as service_provider_status_payload,
+    run_model_provider_test_call as service_run_model_provider_test_call,
+    save_provider_config_candidate as service_save_provider_config_candidate,
+)
+from .services.model_provider_cadence import provider_cadence_status_payload
+from .services.provider_config import (
+    provider_config_audit_payload,
+    validate_provider_config_candidate,
+)
 
 
 def get_model_provider_config() -> ModelProviderConfig:
-    config = load_config()
-    llm_config = config.get("llm", {})
-    permissions = config.get("permissions", {})
-
-    active_provider = str(llm_config.get("active_provider", "")).strip()
-    providers: dict[str, Any] = llm_config.get("providers", {})
-    provider_config = providers.get(active_provider, {}) if active_provider else {}
-    model = str(provider_config.get("model", "")).strip()
-    api_key = str(provider_config.get("api_key", "")).strip()
-    base_url = str(provider_config.get("base_url", "")).strip()
-
-    enabled = bool(llm_config.get("enabled", False))
-    allowed = bool(permissions.get("model.call", False))
-
-    return ModelProviderConfig(
-        enabled=enabled and allowed,
-        active_provider=active_provider,
-        model=model,
-        configured=bool(active_provider and model and base_url and api_key),
-    )
+    return service_get_model_provider_config(load_config)
 
 
 def provider_status_payload() -> dict[str, Any]:
-    provider = get_model_provider_config()
-    return {
-        "enabled": provider.enabled,
-        "active_provider": provider.active_provider,
-        "model": provider.model,
-        "configured": provider.configured,
-    }
+    return service_provider_status_payload(load_config)
 
 
 def provider_config_payload() -> dict[str, Any]:
-    config = load_config()
-    llm_config = config.get("llm", {})
-    permissions = config.get("permissions", {})
-    if not isinstance(llm_config, dict):
-        llm_config = {}
-    if not isinstance(permissions, dict):
-        permissions = {}
+    return service_provider_config_payload(load_config)
 
-    providers = llm_config.get("providers", {})
-    if not isinstance(providers, dict):
-        providers = {}
 
-    provider_items: dict[str, dict[str, Any]] = {}
-    for name, raw_provider in sorted(providers.items(), key=lambda item: str(item[0])):
-        provider_config = raw_provider if isinstance(raw_provider, dict) else {}
-        api_key = str(provider_config.get("api_key", ""))
-        provider_items[str(name)] = {
-            "base_url": str(provider_config.get("base_url", "")),
-            "model": str(provider_config.get("model", "")),
-            "temperature": provider_config.get("temperature"),
-            "stream": bool(provider_config.get("stream", False)),
-            "api_key_configured": bool(api_key.strip()),
-            "api_key_masked": mask_secret(api_key),
-        }
+def provider_readiness_payload() -> dict[str, Any]:
+    return service_provider_readiness_payload(provider_config_payload)
 
-    active_provider = str(llm_config.get("active_provider", "")).strip()
-    enabled_requested = bool(llm_config.get("enabled", False))
-    permission_allowed = bool(permissions.get("model.call", False))
 
-    return {
-        "enabled_requested": enabled_requested,
-        "permission_allowed": permission_allowed,
-        "effective_enabled": enabled_requested and permission_allowed,
-        "active_provider": active_provider,
-        "providers": provider_items,
-        "real_model_calls": False,
-        "read_only": True,
-    }
+def save_provider_config_candidate(candidate: dict[str, Any]) -> dict[str, Any]:
+    return service_save_provider_config_candidate(
+        candidate,
+        load_config_fn=load_config,
+        save_config_fn=save_config,
+        config_path=CONFIG_PATH,
+    )
+
+
+def _active_provider_call_config() -> dict[str, Any]:
+    return service_active_provider_call_config(load_config)
+
+
+def run_model_provider_test_call(payload: dict[str, Any]) -> dict[str, Any]:
+    return service_run_model_provider_test_call(
+        payload,
+        readiness_payload_fn=provider_readiness_payload,
+        active_provider_call_config_fn=_active_provider_call_config,
+        post_chat_completion_fn=post_chat_completion,
+        extract_message_content_fn=extract_message_content,
+    )

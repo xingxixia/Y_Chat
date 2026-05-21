@@ -35,6 +35,14 @@ contextBridge.exposeInMainWorld("yChat", {
     return () => ipcRenderer.removeListener("debug:state", listener);
   },
   getEventHistoryStatus: () => ipcRenderer.invoke("debug:event-history-status"),
+  getScreenObservationStatus: () => ipcRenderer.invoke("screen:observation-status"),
+  startScreenObservation: (options) => ipcRenderer.invoke("screen:observation-start", options),
+  stopScreenObservation: (options) => ipcRenderer.invoke("screen:observation-stop", options),
+  onScreenObservationStatus: (handler) => {
+    const listener = (_event, status) => handler(status);
+    ipcRenderer.on("screen:observation-status", listener);
+    return () => ipcRenderer.removeListener("screen:observation-status", listener);
+  },
   onCommandFocus: (handler) => {
     ipcRenderer.on("command:focus", handler);
     return () => ipcRenderer.removeListener("command:focus", handler);

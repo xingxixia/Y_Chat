@@ -2,51 +2,75 @@ from __future__ import annotations
 
 import json
 import sqlite3
-from datetime import datetime, timezone
 from typing import Any
 from uuid import uuid4
 
-from .config import RUNTIME_DIR, load_config, runtime_sqlite_path
+from .config import load_config
 from .events import EventEnvelope, make_event
-
-
-PROVIDER_NAME = "deterministic_fallback"
-SCHEMA_VERSION = "reasoning.v1"
-HIGH_RISK_ACTIONS = {
-    "external.http",
-    "external.lan",
-    "external.osc",
-    "file.write",
-    "input.control",
-    "process.run",
-    "screen.observe.long",
-    "voice.listen.long",
-    "vr.output",
-}
-REPAIRABLE_TOP_LEVEL_DEFAULTS: dict[str, Any] = {
-    "actions": [],
-    "observations": [],
-    "voice": {"speak": False, "text": None, "voice_style": None},
-    "debug": {
-        "depth": "lightweight",
-        "needs_deep_retrieval": False,
-        "deep_retrieval_query": None,
-        "trace": [],
-    },
-    "audit": {"safety_notes": [], "permission_requests": []},
-}
-
-
-class ReasoningRequest(dict):
-    pass
+from .provider_client import ProviderCallError
+from .services.reasoning_actions import (
+    classify_action as action_classify_action,
+    normalize_action as action_normalize_action,
+)
+from .services.reasoning_context import (
+    ReasoningRequest,
+    build_context_snapshot as context_build_context_snapshot,
+    build_reasoning_request as context_build_reasoning_request,
+    recent_audio_reasoning_context as context_recent_audio_reasoning_context,
+    recent_visual_reasoning_context as context_recent_visual_reasoning_context,
+    source_event_summary as context_source_event_summary,
+)
+from .services.reasoning_fallback import (
+    build_deterministic_output as fallback_build_deterministic_output,
+)
+from .services.reasoning_modalities import (
+    infer_event_modalities as modal_infer_event_modalities,
+    primary_event_modality as modal_primary_event_modality,
+)
+from .services.reasoning_provider import (
+    PROVIDER_NAME,
+    active_model_call_config as provider_active_model_call_config,
+    build_provider_prompt as provider_build_provider_prompt,
+    call_openai_compatible_chat as provider_call_openai_compatible_chat,
+    extract_json_object as provider_extract_json_object,
+    multimodal_context_summary as provider_multimodal_context_summary,
+    strip_secrets_from_request as provider_strip_secrets_from_request,
+)
+from .services.reasoning_query import (
+    decorate_run_row as query_decorate_run_row,
+    get_latest_run_summary as query_get_latest_run_summary,
+    get_reasoning_run as query_get_reasoning_run,
+    list_reasoning_runs as query_list_reasoning_runs,
+)
+from .services.reasoning_schema import (
+    SCHEMA_VERSION,
+    reasoning_contract_payload as schema_reasoning_contract_payload,
+    repair_reasoning_output as schema_repair_reasoning_output,
+    validate_reasoning_output as schema_validate_reasoning_output,
+)
+from .services.reasoning_store import (
+    connect as store_connect,
+    ensure_reasoning_db as store_ensure_reasoning_db,
+    insert_memory_candidate as store_insert_memory_candidate,
+    insert_run as store_insert_run,
+    insert_step as store_insert_step,
+    mark_run_completed as store_mark_run_completed,
+    mark_run_schema_failed as store_mark_run_schema_failed,
+    now_iso,
+    record_action_proposal as store_record_action_proposal,
+    record_context_snapshot as store_record_context_snapshot,
+    record_memory_write_audit as store_record_memory_write_audit,
+    record_pending_action as store_record_pending_action,
+    record_repair_attempt as store_record_repair_attempt,
+    record_schema_failure as store_record_schema_failure,
+)
+from .services.reasoning_visual_enrichment import (
+    ensure_visual_recognition_for_reasoning as visual_enrichment_ensure_visual_recognition_for_reasoning,
+)
 
 
 class ReasoningResponse(dict):
     pass
-
-
-def now_iso() -> str:
-    return datetime.now(timezone.utc).isoformat()
 
 
 def reasoning_enabled() -> bool:
@@ -61,127 +85,31 @@ def configured_permissions() -> dict[str, bool]:
     return {str(name): bool(value) for name, value in permissions.items()}
 
 
+def infer_event_modalities(event: EventEnvelope) -> list[str]:
+    """Classify an event without reducing multimodal input to text only."""
+    payload = event.payload if isinstance(event.payload, dict) else {}
+    return modal_infer_event_modalities(event.type, payload)
+
+
+def primary_event_modality(event: EventEnvelope) -> str:
+    return modal_primary_event_modality(infer_event_modalities(event))
+
+
+def _run_modality_payload(event_type: str) -> dict[str, Any]:
+    event = EventEnvelope(type=event_type, source="stored_run", payload={})
+    modalities = infer_event_modalities(event)
+    return {
+        "primary_modality": primary_event_modality(event),
+        "modalities": modalities,
+    }
+
+
 def ensure_reasoning_db() -> None:
-    RUNTIME_DIR.mkdir(parents=True, exist_ok=True)
-    with sqlite3.connect(runtime_sqlite_path()) as db:
-        db.execute(
-            """
-            CREATE TABLE IF NOT EXISTS reasoning_runs (
-                run_id TEXT PRIMARY KEY,
-                source_event_id TEXT NOT NULL,
-                event_type TEXT NOT NULL,
-                status TEXT NOT NULL,
-                depth TEXT NOT NULL,
-                provider TEXT NOT NULL,
-                created_at TEXT NOT NULL,
-                updated_at TEXT NOT NULL,
-                reply_text TEXT,
-                failure_summary TEXT
-            )
-            """
-        )
-        db.execute(
-            """
-            CREATE TABLE IF NOT EXISTS reasoning_steps (
-                step_id TEXT PRIMARY KEY,
-                run_id TEXT NOT NULL,
-                step_index INTEGER NOT NULL,
-                step_type TEXT NOT NULL,
-                status TEXT NOT NULL,
-                summary TEXT NOT NULL,
-                created_at TEXT NOT NULL
-            )
-            """
-        )
-        db.execute(
-            """
-            CREATE TABLE IF NOT EXISTS reasoning_schema_failures (
-                failure_id TEXT PRIMARY KEY,
-                run_id TEXT NOT NULL,
-                error TEXT NOT NULL,
-                created_at TEXT NOT NULL
-            )
-            """
-        )
-        db.execute(
-            """
-            CREATE TABLE IF NOT EXISTS action_audit (
-                audit_id TEXT PRIMARY KEY,
-                run_id TEXT,
-                action_id TEXT,
-                status TEXT NOT NULL,
-                payload_json TEXT NOT NULL,
-                created_at TEXT NOT NULL
-            )
-            """
-        )
-        db.execute(
-            """
-            CREATE TABLE IF NOT EXISTS pending_actions (
-                pending_id TEXT PRIMARY KEY,
-                run_id TEXT,
-                action_id TEXT,
-                status TEXT NOT NULL,
-                payload_json TEXT NOT NULL,
-                created_at TEXT NOT NULL
-            )
-            """
-        )
-        db.execute(
-            """
-            CREATE TABLE IF NOT EXISTS permission_audit (
-                audit_id TEXT PRIMARY KEY,
-                run_id TEXT,
-                capability TEXT,
-                status TEXT NOT NULL,
-                payload_json TEXT NOT NULL,
-                created_at TEXT NOT NULL
-            )
-            """
-        )
-        db.execute(
-            """
-            CREATE TABLE IF NOT EXISTS memory_write_candidates (
-                candidate_id TEXT PRIMARY KEY,
-                run_id TEXT NOT NULL,
-                target_layer TEXT NOT NULL,
-                kind TEXT NOT NULL,
-                confidence REAL NOT NULL,
-                accepted INTEGER NOT NULL,
-                payload_json TEXT NOT NULL,
-                created_at TEXT NOT NULL
-            )
-            """
-        )
-        db.execute(
-            """
-            CREATE TABLE IF NOT EXISTS memory_write_audit (
-                audit_id TEXT PRIMARY KEY,
-                run_id TEXT,
-                candidate_id TEXT,
-                status TEXT NOT NULL,
-                payload_json TEXT NOT NULL,
-                created_at TEXT NOT NULL
-            )
-            """
-        )
-        db.execute(
-            """
-            CREATE TABLE IF NOT EXISTS provider_config_audit (
-                audit_id TEXT PRIMARY KEY,
-                status TEXT NOT NULL,
-                payload_json TEXT NOT NULL,
-                created_at TEXT NOT NULL
-            )
-            """
-        )
+    store_ensure_reasoning_db()
 
 
 def _connect() -> sqlite3.Connection:
-    ensure_reasoning_db()
-    db = sqlite3.connect(runtime_sqlite_path())
-    db.row_factory = sqlite3.Row
-    return db
+    return store_connect()
 
 
 def _insert_step(
@@ -192,17 +120,24 @@ def _insert_step(
     status: str,
     summary: str,
 ) -> str:
-    step_id = str(uuid4())
-    db.execute(
-        """
-        INSERT INTO reasoning_steps (
-            step_id, run_id, step_index, step_type, status, summary, created_at
-        )
-        VALUES (?, ?, ?, ?, ?, ?, ?)
-        """,
-        (step_id, run_id, step_index, step_type, status, summary, now_iso()),
-    )
-    return step_id
+    return store_insert_step(db, run_id, step_index, step_type, status, summary)
+
+
+def _source_event_summary(event: EventEnvelope) -> dict[str, Any]:
+    return context_source_event_summary(event)
+
+
+def build_context_snapshot(request: ReasoningRequest) -> dict[str, Any]:
+    return context_build_context_snapshot(request)
+
+
+def _record_context_snapshot(
+    db: sqlite3.Connection,
+    run_id: str,
+    request: ReasoningRequest,
+) -> str:
+    snapshot = build_context_snapshot(request)
+    return store_record_context_snapshot(db, run_id, snapshot)
 
 
 def _insert_memory_candidate(
@@ -210,28 +145,7 @@ def _insert_memory_candidate(
     run_id: str,
     candidate: dict[str, Any],
 ) -> str:
-    candidate_id = str(candidate["candidate_id"])
-    payload = {**candidate, "accepted": False}
-    db.execute(
-        """
-        INSERT INTO memory_write_candidates (
-            candidate_id, run_id, target_layer, kind, confidence, accepted,
-            payload_json, created_at
-        )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-        """,
-        (
-            candidate_id,
-            run_id,
-            payload["target_layer"],
-            payload["kind"],
-            float(payload["confidence"]),
-            0,
-            json.dumps(payload, ensure_ascii=True),
-            now_iso(),
-        ),
-    )
-    return candidate_id
+    return store_insert_memory_candidate(db, run_id, candidate)
 
 
 def _record_memory_write_audit(
@@ -240,41 +154,11 @@ def _record_memory_write_audit(
     candidate: dict[str, Any],
     status: str,
 ) -> None:
-    payload = {
-        "candidate_id": candidate["candidate_id"],
-        "target_layer": candidate["target_layer"],
-        "kind": candidate["kind"],
-        "accepted": False,
-        "status": status,
-        "reason": candidate.get("reason"),
-        "review_required": candidate.get("review_required", True),
-    }
-    db.execute(
-        """
-        INSERT INTO memory_write_audit (
-            audit_id, run_id, candidate_id, status, payload_json, created_at
-        )
-        VALUES (?, ?, ?, ?, ?, ?)
-        """,
-        (
-            str(uuid4()),
-            run_id,
-            str(candidate["candidate_id"]),
-            status,
-            json.dumps(payload, ensure_ascii=True),
-            now_iso(),
-        ),
-    )
+    store_record_memory_write_audit(db, run_id, candidate, status)
 
 
 def _record_schema_failure(db: sqlite3.Connection, run_id: str, error: str) -> None:
-    db.execute(
-        """
-        INSERT INTO reasoning_schema_failures (failure_id, run_id, error, created_at)
-        VALUES (?, ?, ?, ?)
-        """,
-        (str(uuid4()), run_id, error, now_iso()),
-    )
+    store_record_schema_failure(db, run_id, error)
 
 
 def _record_repair_attempt(
@@ -284,45 +168,15 @@ def _record_repair_attempt(
     before_errors: list[str],
     after_errors: list[str],
 ) -> None:
-    payload = {
-        "status": status,
-        "before_errors": before_errors,
-        "after_errors": after_errors,
-        "repair_policy": "fill_missing_structural_defaults_only",
-    }
-    db.execute(
-        """
-        INSERT INTO reasoning_schema_failures (failure_id, run_id, error, created_at)
-        VALUES (?, ?, ?, ?)
-        """,
-        (str(uuid4()), run_id, json.dumps(payload, ensure_ascii=True), now_iso()),
-    )
+    store_record_repair_attempt(db, run_id, status, before_errors, after_errors)
 
 
 def _normalize_action(action: dict[str, Any]) -> dict[str, Any]:
-    risk = str(action.get("risk", "low")).lower()
-    if risk not in {"low", "medium", "high"}:
-        risk = "medium"
-    return {
-        "action_id": str(action.get("action_id") or uuid4()),
-        "capability": str(action["capability"]),
-        "name": str(action["name"]),
-        "params": action.get("params") if isinstance(action.get("params"), dict) else {},
-        "reason": str(action.get("reason", "")),
-        "risk": risk,
-        "requires_confirmation": bool(action.get("requires_confirmation", False)),
-        "retryable": bool(action.get("retryable", False)),
-    }
+    return action_normalize_action(action)
 
 
 def _classify_action(action: dict[str, Any], permissions: dict[str, bool]) -> tuple[str, str]:
-    capability = str(action["capability"])
-    risk = str(action["risk"])
-    if risk == "high" or capability in HIGH_RISK_ACTIONS or action["requires_confirmation"]:
-        return "pending_authorization", "requires_secondary_confirmation"
-    if not permissions.get(capability, False):
-        return "pending_authorization", "permission_disabled"
-    return "approved_low_risk_not_executed", "r1_does_not_execute_actions"
+    return action_classify_action(action, permissions)
 
 
 def _record_action_proposal(
@@ -332,23 +186,7 @@ def _record_action_proposal(
     status: str,
     reason: str,
 ) -> None:
-    payload = {**action, "status": status, "policy_reason": reason, "executed": False}
-    db.execute(
-        """
-        INSERT INTO action_audit (
-            audit_id, run_id, action_id, status, payload_json, created_at
-        )
-        VALUES (?, ?, ?, ?, ?, ?)
-        """,
-        (
-            str(uuid4()),
-            run_id,
-            action["action_id"],
-            status,
-            json.dumps(payload, ensure_ascii=True),
-            now_iso(),
-        ),
-    )
+    store_record_action_proposal(db, run_id, action, status, reason)
 
 
 def _record_pending_action(
@@ -357,108 +195,86 @@ def _record_pending_action(
     action: dict[str, Any],
     reason: str,
 ) -> str:
-    pending_id = str(uuid4())
-    payload = {**action, "pending_reason": reason, "executed": False}
-    db.execute(
-        """
-        INSERT INTO pending_actions (
-            pending_id, run_id, action_id, status, payload_json, created_at
-        )
-        VALUES (?, ?, ?, ?, ?, ?)
-        """,
-        (
-            pending_id,
-            run_id,
-            action["action_id"],
-            "pending",
-            json.dumps(payload, ensure_ascii=True),
-            now_iso(),
-        ),
-    )
-    return pending_id
+    return store_record_pending_action(db, run_id, action, reason)
+
+
+def recent_visual_reasoning_context(limit: int = 5) -> dict[str, Any]:
+    with _connect() as db:
+        return context_recent_visual_reasoning_context(db, limit)
+
+
+def recent_audio_reasoning_context(limit: int = 5) -> dict[str, Any]:
+    with _connect() as db:
+        return context_recent_audio_reasoning_context(db, limit)
 
 
 def build_deterministic_output(run_id: str, event: EventEnvelope) -> dict[str, Any]:
-    text = str(event.payload.get("text", "")).strip()
-    reply_text = (
-        f"Received: {text}\n\n"
-        "Reasoning R1 deterministic fallback handled this command."
-    )
-    candidate_id = str(uuid4())
-    return {
-        "schema_version": SCHEMA_VERSION,
-        "run_id": run_id,
-        "reply": {
-            "should_reply": True,
-            "text": reply_text,
-            "bubble_text": reply_text,
-            "style": "normal",
-            "final": True,
-        },
-        "state": {
-            "pet_state": "talking",
-            "emotion": "neutral",
-            "animation": None,
-        },
-        "actions": [],
-        "memory": {
-            "write_candidates": [
-                {
-                    "candidate_id": candidate_id,
-                    "target_layer": "short_term",
-                    "kind": "task_state",
-                    "content": {"text": text},
-                    "related_entity_id": None,
-                    "source_event_ids": [event.event_id],
-                    "reason": "R1 fallback records command input for Debug inspection only.",
-                    "confidence": 0.4,
-                    "importance": 0.2,
-                    "review_required": True,
-                }
-            ],
-            "do_not_write_reason": None,
-            "needs_consolidation": False,
-        },
-        "observations": [],
-        "voice": {
-            "speak": False,
-            "text": None,
-            "voice_style": None,
-        },
-        "debug": {
-            "depth": "lightweight",
-            "needs_deep_retrieval": False,
-            "deep_retrieval_query": None,
-            "trace": [],
-        },
-        "audit": {
-            "safety_notes": ["deterministic fallback; real model not called"],
-            "permission_requests": [],
-        },
-    }
+    return fallback_build_deterministic_output(run_id, event)
 
 
 def build_reasoning_request(run_id: str, event: EventEnvelope) -> ReasoningRequest:
-    text = str(event.payload.get("text", "")).strip()
-    return ReasoningRequest(
-        {
-            "schema_version": "reasoning_request.v1",
-            "run_id": run_id,
-            "source_event": event.model_dump(),
-            "depth": "lightweight",
-            "provider": PROVIDER_NAME,
-            "context": {
-                "current_event_text": text,
-                "recent_summary": [],
-                "entity_refs": [],
-                "core_memory_summary": [],
-            },
-            "real_model_calls": False,
-        }
-    )
+    with _connect() as db:
+        visual_context = context_recent_visual_reasoning_context(db)
+        audio_context = context_recent_audio_reasoning_context(db)
+    return context_build_reasoning_request(run_id, event, visual_context, audio_context, active_model_call_config())
+
+
+def ensure_visual_recognition_for_reasoning(event: EventEnvelope) -> dict[str, Any]:
+    return visual_enrichment_ensure_visual_recognition_for_reasoning(event)
+
+
+def _should_report_visual_enrichment(result: dict[str, Any]) -> bool:
+    return bool(result.get("called")) or result.get("reason") != "visual understanding was not requested"
+
+
+def active_model_call_config() -> dict[str, Any]:
+    return provider_active_model_call_config()
+
+
+def strip_secrets_from_request(request: ReasoningRequest) -> dict[str, Any]:
+    return provider_strip_secrets_from_request(request)
+
+
+def build_provider_prompt(request: ReasoningRequest) -> str:
+    return provider_build_provider_prompt(request)
+
+
+def multimodal_context_summary(request: ReasoningRequest) -> dict[str, Any]:
+    return provider_multimodal_context_summary(request)
+
+
+def extract_json_object(text: str) -> dict[str, Any]:
+    return provider_extract_json_object(text)
+
+
+def call_openai_compatible_chat(request: ReasoningRequest, config: dict[str, Any]) -> dict[str, Any]:
+    return provider_call_openai_compatible_chat(request, config)
 
 
 def generate_reasoning(request: ReasoningRequest) -> ReasoningResponse:
+    model_config = active_model_call_config()
+    if model_config["enabled"]:
+        try:
+            output = call_openai_compatible_chat(request, model_config)
+            return ReasoningResponse(
+                {
+                    "provider": model_config["provider"],
+                    "real_model_call": True,
+                    "output": output,
+                }
+            )
+        except (ProviderCallError, KeyError, ValueError, json.JSONDecodeError) as exc:
+            event = EventEnvelope.model_validate(request["source_event"])
+            fallback_output = build_deterministic_output(str(request["run_id"]), event)
+            fallback_output["audit"]["safety_notes"].append(f"real provider failed; deterministic fallback used: {type(exc).__name__}")
+            return ReasoningResponse(
+                {
+                    "provider": model_config["provider"],
+                    "real_model_call": True,
+                    "provider_error": type(exc).__name__,
+                    "output": fallback_output,
+                }
+            )
     event = EventEnvelope.model_validate(request["source_event"])
     output = build_deterministic_output(str(request["run_id"]), event)
     return ReasoningResponse(
@@ -470,110 +286,20 @@ def generate_reasoning(request: ReasoningRequest) -> ReasoningResponse:
     )
 
 
+def reasoning_contract_payload() -> dict[str, Any]:
+    return schema_reasoning_contract_payload()
+
+
 def repair_reasoning_output(
     output: dict[str, Any],
     run_id: str,
     event: EventEnvelope,
 ) -> dict[str, Any]:
-    repaired = dict(output)
-    repaired.setdefault("schema_version", SCHEMA_VERSION)
-    repaired.setdefault("run_id", run_id)
-    for key, value in REPAIRABLE_TOP_LEVEL_DEFAULTS.items():
-        if key not in repaired:
-            repaired[key] = value.copy() if isinstance(value, dict) else list(value)
-
-    if "reply" not in repaired:
-        repaired["reply"] = {
-            "should_reply": False,
-            "text": "",
-            "bubble_text": "",
-            "style": "normal",
-            "final": True,
-        }
-    elif isinstance(repaired["reply"], dict):
-        repaired["reply"].setdefault("should_reply", False)
-        repaired["reply"].setdefault("text", "")
-        repaired["reply"].setdefault("bubble_text", repaired["reply"].get("text", ""))
-        repaired["reply"].setdefault("style", "normal")
-        repaired["reply"].setdefault("final", True)
-
-    if "state" not in repaired:
-        repaired["state"] = {
-            "pet_state": "idle",
-            "emotion": "neutral",
-            "animation": None,
-        }
-
-    if "memory" not in repaired:
-        repaired["memory"] = {
-            "write_candidates": [],
-            "do_not_write_reason": "schema_repair_added_empty_memory_section",
-            "needs_consolidation": False,
-        }
-    elif isinstance(repaired["memory"], dict):
-        repaired["memory"].setdefault("write_candidates", [])
-        repaired["memory"].setdefault("do_not_write_reason", "schema_repair")
-        repaired["memory"].setdefault("needs_consolidation", False)
-
-    return repaired
+    return schema_repair_reasoning_output(output, run_id)
 
 
 def validate_reasoning_output(output: dict[str, Any], run_id: str) -> list[str]:
-    errors: list[str] = []
-    if output.get("schema_version") != SCHEMA_VERSION:
-        errors.append("schema_version must be reasoning.v1")
-    if output.get("run_id") != run_id:
-        errors.append("run_id mismatch")
-
-    reply = output.get("reply")
-    if not isinstance(reply, dict):
-        errors.append("reply must be an object")
-    else:
-        if not isinstance(reply.get("should_reply"), bool):
-            errors.append("reply.should_reply must be boolean")
-        if reply.get("should_reply") and not isinstance(reply.get("text"), str):
-            errors.append("reply.text must be string when should_reply is true")
-        if reply.get("final") is not True:
-            errors.append("reply.final must be true")
-
-    if not isinstance(output.get("actions"), list):
-        errors.append("actions must be a list")
-    else:
-        seen_action_ids: set[str] = set()
-        for index, action in enumerate(output["actions"]):
-            if not isinstance(action, dict):
-                errors.append(f"actions[{index}] must be an object")
-                continue
-            for field in ("capability", "name", "params", "reason", "risk"):
-                if field not in action:
-                    errors.append(f"actions[{index}].{field} is required")
-            if "action_id" in action:
-                action_id = str(action["action_id"])
-                if action_id in seen_action_ids:
-                    errors.append(f"actions[{index}].action_id is duplicated")
-                seen_action_ids.add(action_id)
-            if "params" in action and not isinstance(action["params"], dict):
-                errors.append(f"actions[{index}].params must be an object")
-            if "risk" in action and str(action["risk"]).lower() not in {"low", "medium", "high"}:
-                errors.append(f"actions[{index}].risk must be low, medium, or high")
-
-    memory = output.get("memory")
-    if not isinstance(memory, dict):
-        errors.append("memory must be an object")
-    elif not isinstance(memory.get("write_candidates"), list):
-        errors.append("memory.write_candidates must be a list")
-    else:
-        for index, candidate in enumerate(memory["write_candidates"]):
-            if not isinstance(candidate, dict):
-                errors.append(f"memory.write_candidates[{index}] must be an object")
-                continue
-            for field in ("candidate_id", "target_layer", "kind", "content", "source_event_ids", "confidence"):
-                if field not in candidate:
-                    errors.append(f"memory.write_candidates[{index}].{field} is required")
-            if "confidence" in candidate and not isinstance(candidate["confidence"], int | float):
-                errors.append(f"memory.write_candidates[{index}].confidence must be numeric")
-
-    return errors
+    return schema_validate_reasoning_output(output, run_id)
 
 
 def run_deterministic_reasoning(event: EventEnvelope) -> dict[str, Any]:
@@ -581,9 +307,14 @@ def run_deterministic_reasoning(event: EventEnvelope) -> dict[str, Any]:
 
     run_id = str(uuid4())
     created_at = now_iso()
+    visual_enrichment = ensure_visual_recognition_for_reasoning(event)
     request = build_reasoning_request(run_id, event)
     response = generate_reasoning(request)
+    response_provider = str(response.get("provider") or PROVIDER_NAME)
+    real_model_call = bool(response.get("real_model_call", False))
     output = response["output"]
+    input_modalities = request["input"]["modalities"]
+    primary_modality = request["input"]["primary_modality"]
     validation_errors = validate_reasoning_output(output, run_id)
     repaired = False
     repair_errors: list[str] = []
@@ -593,55 +324,66 @@ def run_deterministic_reasoning(event: EventEnvelope) -> dict[str, Any]:
         if not repair_errors:
             output = repaired_output
             repaired = True
+    repair_step_id: str | None = None
+    report_visual_enrichment = _should_report_visual_enrichment(visual_enrichment)
     reply = output.get("reply") if isinstance(output.get("reply"), dict) else {}
     reply_text = str(reply.get("bubble_text") or reply.get("text") or "")
 
     with _connect() as db:
-        db.execute(
-            """
-            INSERT INTO reasoning_runs (
-                run_id, source_event_id, event_type, status, depth, provider,
-                created_at, updated_at, reply_text, failure_summary
-            )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """,
-            (
-                run_id,
-                event.event_id,
-                event.type,
-                "created",
-                "lightweight",
-                PROVIDER_NAME,
-                created_at,
-                created_at,
-                None,
-                None,
-            ),
+        store_insert_run(
+            db,
+            run_id=run_id,
+            source_event_id=event.event_id,
+            event_type=event.type,
+            depth="lightweight",
+            provider=response_provider,
+            primary_modality=primary_modality,
+            modalities=input_modalities,
+            created_at=created_at,
         )
+        context_snapshot_id = _record_context_snapshot(db, run_id, request)
         context_step_id = _insert_step(
             db,
             run_id,
             1,
             "context_check",
             "completed",
-            "R1 built a minimal context packet from the source event.",
+            "R1 built and stored a sanitized multimodal context snapshot from the source event.",
         )
+        step_index = 2
+        visual_enrichment_step_id: str | None = None
+        if report_visual_enrichment:
+            visual_enrichment_step_id = _insert_step(
+                db,
+                run_id,
+                step_index,
+                "visual_context_enrichment",
+                "completed" if visual_enrichment.get("ok") else "skipped",
+                (
+                    "R1 ensured local VLM visual recognition for an explicit visual request."
+                    if visual_enrichment.get("called")
+                    else f"R1 visual enrichment not run: {visual_enrichment.get('reason') or 'not needed'}."
+                ),
+            )
+            step_index += 1
         output_step_id = _insert_step(
             db,
             run_id,
-            2,
+            step_index,
             "provider_running",
             "completed",
-            "R1 called generate_reasoning through the deterministic fallback provider route.",
+            f"R1 called generate_reasoning through the {response_provider} provider route.",
         )
+        step_index += 1
         schema_step_id = _insert_step(
             db,
             run_id,
-            3,
+            step_index,
             "schema_validating",
             "completed" if not validation_errors or repaired else "failed",
             "R1 validated deterministic fallback output against reasoning.v1.",
         )
+        step_index += 1
         if validation_errors:
             _record_repair_attempt(
                 db,
@@ -653,7 +395,7 @@ def run_deterministic_reasoning(event: EventEnvelope) -> dict[str, Any]:
             repair_step_id = _insert_step(
                 db,
                 run_id,
-                4,
+                step_index,
                 "schema_repair",
                 "completed" if repaired else "failed",
                 "R1 attempted one structural schema repair without adding actions or memory.",
@@ -662,25 +404,22 @@ def run_deterministic_reasoning(event: EventEnvelope) -> dict[str, Any]:
         if validation_errors and not repaired:
             for error in validation_errors:
                 _record_schema_failure(db, run_id, error)
-            db.execute(
-                """
-                UPDATE reasoning_runs
-                SET status = ?, updated_at = ?, failure_summary = ?
-                WHERE run_id = ?
-                """,
-                ("schema_failed", now_iso(), "; ".join(validation_errors), run_id),
-            )
+            store_mark_run_schema_failed(db, run_id, validation_errors)
             return {
                 "run_id": run_id,
-                "events": [
-                    make_event(
+            "events": [
+                make_event(
                         "reasoning.started",
                         "backend",
                         {
                             "run_id": run_id,
                             "depth": "lightweight",
-                            "provider": PROVIDER_NAME,
+                            "provider": response_provider,
+                            "real_model_call": real_model_call,
                             "source_event_id": event.event_id,
+                            "primary_modality": primary_modality,
+                            "modalities": input_modalities,
+                            "context_snapshot_id": context_snapshot_id,
                         },
                         correlation_id=event.event_id,
                     ).model_dump(),
@@ -745,15 +484,7 @@ def run_deterministic_reasoning(event: EventEnvelope) -> dict[str, Any]:
                 }
             )
 
-        updated_at = now_iso()
-        db.execute(
-            """
-            UPDATE reasoning_runs
-            SET status = ?, updated_at = ?, reply_text = ?
-            WHERE run_id = ?
-            """,
-            ("completed", updated_at, reply_text, run_id),
-        )
+        store_mark_run_completed(db, run_id, reply_text)
 
     events = [
         make_event(
@@ -762,8 +493,12 @@ def run_deterministic_reasoning(event: EventEnvelope) -> dict[str, Any]:
             {
                 "run_id": run_id,
                 "depth": "lightweight",
-                "provider": PROVIDER_NAME,
+                "provider": response_provider,
+                "real_model_call": real_model_call,
                 "source_event_id": event.event_id,
+                "primary_modality": primary_modality,
+                "modalities": input_modalities,
+                "context_snapshot_id": context_snapshot_id,
             },
             correlation_id=event.event_id,
         ),
@@ -816,13 +551,33 @@ def run_deterministic_reasoning(event: EventEnvelope) -> dict[str, Any]:
             {
                 "run_id": run_id,
                 "schema_version": SCHEMA_VERSION,
-                "provider": PROVIDER_NAME,
+                "provider": response_provider,
+                "real_model_call": real_model_call,
                 "memory_candidate_ids": candidate_ids,
                 "action_ids": [record["action_id"] for record in action_records],
+                "primary_modality": primary_modality,
+                "modalities": input_modalities,
             },
             correlation_id=event.event_id,
         ),
     ]
+    if visual_enrichment_step_id:
+        events.insert(
+            3,
+            make_event(
+                "reasoning.step.completed",
+                "backend",
+                {
+                    "run_id": run_id,
+                    "step_id": visual_enrichment_step_id,
+                    "step_type": "visual_context_enrichment",
+                    "status": "completed" if visual_enrichment.get("ok") else "skipped",
+                    "called": bool(visual_enrichment.get("called")),
+                    "provider": visual_enrichment.get("provider"),
+                },
+                correlation_id=event.event_id,
+            ),
+        )
     if repaired:
         events.append(
             make_event(
@@ -901,159 +656,59 @@ def run_deterministic_reasoning(event: EventEnvelope) -> dict[str, Any]:
 
 def reasoning_status_payload() -> dict[str, Any]:
     ensure_reasoning_db()
+    model_config = active_model_call_config()
     with _connect() as db:
-        row = db.execute(
-            """
-            SELECT run_id, status, depth, provider, updated_at, failure_summary
-            FROM reasoning_runs
-            ORDER BY updated_at DESC
-            LIMIT 1
-            """
-        ).fetchone()
-        total = db.execute("SELECT COUNT(*) AS count FROM reasoning_runs").fetchone()["count"]
+        current_run, total = query_get_latest_run_summary(db, _run_modality_payload)
 
     return {
         "enabled": reasoning_enabled(),
-        "provider": PROVIDER_NAME,
-        "real_model_calls": False,
+        "provider": model_config["provider"] if model_config["enabled"] else PROVIDER_NAME,
+        "real_model_calls": model_config["enabled"],
+        "provider_mode": model_config["provider"] if model_config["enabled"] else "deterministic_fallback",
+        "model_blocked_reasons": [] if model_config["enabled"] else [
+            "real model calls are disabled until llm.enabled, permissions.model.call, provider, model, base_url, and API key are all configured",
+        ],
+        "supported_input_modalities": [
+            "text",
+            "vision",
+            "audio",
+            "state",
+            "memory",
+            "project",
+            "interaction",
+            "action",
+            "external",
+            "vr",
+        ],
+        "capture_enabled": {"vision": True, "audio": False, "screen": True, "voice": False},
+        "capture_blocked_reasons": {
+            "vision": "physical camera capture and neural image embeddings are not implemented; screen frames can enter visual evidence when screen.observe is enabled",
+            "audio": "microphone capture is not implemented and voice.listen is disabled",
+            "screen": "screen observation is gated by screen.observe and secondary confirmation; capture is not active from the backend process itself",
+            "voice": "ASR/TTS route is not selected",
+        },
+        "write_paths": {
+            "memory_candidates": "inspect_only",
+            "formal_memory": "disabled",
+            "actions": "proposal_only",
+        },
         "queue": {"foreground_active": False, "background_pending": 0},
         "runs_total": total,
-        "current_run": dict(row) if row else None,
+        "current_run": current_run,
     }
+
+
+def _decorate_run_row(row: dict[str, Any]) -> dict[str, Any]:
+    return query_decorate_run_row(row, _run_modality_payload)
 
 
 def list_reasoning_runs(limit: int = 50) -> list[dict[str, Any]]:
     ensure_reasoning_db()
-    safe_limit = max(1, min(limit, 100))
     with _connect() as db:
-        rows = db.execute(
-            """
-            SELECT run_id, source_event_id, event_type, status, depth, provider,
-                   created_at, updated_at, reply_text, failure_summary
-            FROM reasoning_runs
-            ORDER BY updated_at DESC
-            LIMIT ?
-            """,
-            (safe_limit,),
-        ).fetchall()
-    return [dict(row) for row in rows]
+        return query_list_reasoning_runs(db, _run_modality_payload, limit)
 
 
 def get_reasoning_run(run_id: str) -> dict[str, Any] | None:
     ensure_reasoning_db()
     with _connect() as db:
-        run = db.execute(
-            """
-            SELECT run_id, source_event_id, event_type, status, depth, provider,
-                   created_at, updated_at, reply_text, failure_summary
-            FROM reasoning_runs
-            WHERE run_id = ?
-            """,
-            (run_id,),
-        ).fetchone()
-        if run is None:
-            return None
-
-        steps = db.execute(
-            """
-            SELECT step_id, run_id, step_index, step_type, status, summary, created_at
-            FROM reasoning_steps
-            WHERE run_id = ?
-            ORDER BY step_index ASC
-            """,
-            (run_id,),
-        ).fetchall()
-        candidates = db.execute(
-            """
-            SELECT candidate_id, run_id, target_layer, kind, confidence, accepted,
-                   payload_json, created_at
-            FROM memory_write_candidates
-            WHERE run_id = ?
-            ORDER BY created_at ASC
-            """,
-            (run_id,),
-        ).fetchall()
-        schema_failures = db.execute(
-            """
-            SELECT failure_id, run_id, error, created_at
-            FROM reasoning_schema_failures
-            WHERE run_id = ?
-            ORDER BY created_at ASC
-            """,
-            (run_id,),
-        ).fetchall()
-        action_audit = db.execute(
-            """
-            SELECT audit_id, run_id, action_id, status, payload_json, created_at
-            FROM action_audit
-            WHERE run_id = ?
-            ORDER BY created_at ASC
-            """,
-            (run_id,),
-        ).fetchall()
-        pending_actions = db.execute(
-            """
-            SELECT pending_id, run_id, action_id, status, payload_json, created_at
-            FROM pending_actions
-            WHERE run_id = ?
-            ORDER BY created_at ASC
-            """,
-            (run_id,),
-        ).fetchall()
-        memory_audit = db.execute(
-            """
-            SELECT audit_id, run_id, candidate_id, status, payload_json, created_at
-            FROM memory_write_audit
-            WHERE run_id = ?
-            ORDER BY created_at ASC
-            """,
-            (run_id,),
-        ).fetchall()
-
-    return {
-        "run": dict(run),
-        "steps": [dict(row) for row in steps],
-        "schema_failures": [dict(row) for row in schema_failures],
-        "memory_candidates": [
-            {
-                **dict(row),
-                "payload": json.loads(row["payload_json"]),
-                "payload_json": None,
-            }
-            for row in candidates
-        ],
-        "actions": [
-            {
-                **dict(row),
-                "payload": json.loads(row["payload_json"]),
-                "payload_json": None,
-            }
-            for row in action_audit
-        ],
-        "pending_actions": [
-            {
-                **dict(row),
-                "payload": json.loads(row["payload_json"]),
-                "payload_json": None,
-            }
-            for row in pending_actions
-        ],
-        "audit": [
-            {
-                "kind": "action",
-                **dict(row),
-                "payload": json.loads(row["payload_json"]),
-                "payload_json": None,
-            }
-            for row in action_audit
-        ]
-        + [
-            {
-                "kind": "memory_write",
-                **dict(row),
-                "payload": json.loads(row["payload_json"]),
-                "payload_json": None,
-            }
-            for row in memory_audit
-        ],
-    }
+        return query_get_reasoning_run(db, run_id, _run_modality_payload)

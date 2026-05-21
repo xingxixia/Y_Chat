@@ -10,9 +10,12 @@ runtime/config.yaml
 runtime/dev.local.ps1
 runtime/*.sqlite3
 runtime/*.jsonl
+runtime/pytest/
 runtime/logs/*
 runtime/cache/*
 runtime/vector_store/*
+runtime/models/*
+runtime/memory_blobs/*
 !runtime/logs/.gitkeep
 !runtime/cache/.gitkeep
 !runtime/vector_store/.gitkeep

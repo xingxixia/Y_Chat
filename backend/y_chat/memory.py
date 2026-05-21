@@ -1,17 +1,38 @@
 from __future__ import annotations
 
-import json
-import sqlite3
-from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
-from uuid import uuid4
 
-from .config import RUNTIME_DIR, load_config, runtime_sqlite_path
-
-
-def db_path() -> Path:
-    return runtime_sqlite_path()
+from .config import load_config
+from .services.memory_contracts import (
+    ATTACHMENT_REF_CONTRACT,
+    AUDIO_READER_STATUS,
+    MEMORY_LAYER_CONTRACTS,
+    MEMORY_MODALITY_CONTRACTS,
+    TEXT_READER_STATUS,
+    VISION_READER_STATUS,
+)
+from .services.memory_manual import (
+    add_memory_item as service_add_memory_item,
+    delete_memory_item as service_delete_memory_item,
+    list_memory_items,
+)
+from .services.memory_query import (
+    list_memory_audit_log,
+    list_memory_records,
+    list_memory_review_queue,
+    memory_contract_payload,
+    memory_shell_payload as service_memory_shell_payload,
+    memory_status_payload as service_memory_status_payload,
+)
+from .services.memory_store import (
+    db_path,
+    ensure_memory_db,
+    json_dumps as _json_dumps,
+    list_table_rows as _list_table_rows,
+    now_iso,
+    parse_json_field as _parse_json_field,
+)
 
 
 def memory_enabled() -> bool:
@@ -19,133 +40,134 @@ def memory_enabled() -> bool:
     return bool(config.get("permissions", {}).get("memory.write", False))
 
 
-def ensure_memory_db() -> None:
-    RUNTIME_DIR.mkdir(parents=True, exist_ok=True)
-    with sqlite3.connect(db_path()) as db:
-        db.execute(
-            """
-            CREATE TABLE IF NOT EXISTS memory_items (
-                id TEXT PRIMARY KEY,
-                kind TEXT NOT NULL,
-                text TEXT NOT NULL,
-                created_at TEXT NOT NULL
-            )
-            """
-        )
-        db.execute(
-            """
-            CREATE TABLE IF NOT EXISTS memory_records (
-                record_id TEXT PRIMARY KEY,
-                kind TEXT NOT NULL,
-                layer TEXT NOT NULL,
-                status TEXT NOT NULL,
-                version INTEGER NOT NULL,
-                content_json TEXT NOT NULL,
-                evidence_json TEXT NOT NULL,
-                supersedes_record_id TEXT,
-                created_at TEXT NOT NULL,
-                updated_at TEXT NOT NULL
-            )
-            """
-        )
-        db.execute(
-            """
-            CREATE TABLE IF NOT EXISTS memory_audit_log (
-                audit_id TEXT PRIMARY KEY,
-                record_id TEXT,
-                action TEXT NOT NULL,
-                payload_json TEXT NOT NULL,
-                created_at TEXT NOT NULL
-            )
-            """
-        )
+def _ensure_column(db, table: str, column: str, definition: str) -> None:
+    from .data.sqlite_store import ensure_column
 
-
-def list_memory_items() -> list[dict[str, Any]]:
-    ensure_memory_db()
-    with sqlite3.connect(db_path()) as db:
-        db.row_factory = sqlite3.Row
-        rows = db.execute(
-            """
-            SELECT id, kind, text, created_at
-            FROM memory_items
-            ORDER BY created_at DESC
-            LIMIT 100
-            """
-        ).fetchall()
-    return [dict(row) for row in rows]
+    ensure_column(db, table, column, definition)
 
 
 def memory_status_payload() -> dict[str, Any]:
-    ensure_memory_db()
-    with sqlite3.connect(db_path()) as db:
-        db.row_factory = sqlite3.Row
-        manual_count = db.execute("SELECT COUNT(*) AS count FROM memory_items").fetchone()["count"]
-        record_count = db.execute("SELECT COUNT(*) AS count FROM memory_records").fetchone()["count"]
-        audit_count = db.execute("SELECT COUNT(*) AS count FROM memory_audit_log").fetchone()["count"]
-
-    return {
-        "manual_enabled": memory_enabled(),
-        "automatic_writes_enabled": False,
-        "manual_items_count": manual_count,
-        "records_count": record_count,
-        "audit_count": audit_count,
-        "formal_tables_ready": True,
-        "manual_notes_legacy": True,
-    }
+    return service_memory_status_payload(memory_enabled)
 
 
-def list_memory_records(limit: int = 100) -> list[dict[str, Any]]:
-    ensure_memory_db()
-    safe_limit = max(1, min(limit, 200))
-    with sqlite3.connect(db_path()) as db:
-        db.row_factory = sqlite3.Row
-        rows = db.execute(
-            """
-            SELECT record_id, kind, layer, status, version, content_json,
-                   evidence_json, supersedes_record_id, created_at, updated_at
-            FROM memory_records
-            ORDER BY updated_at DESC
-            LIMIT ?
-            """,
-            (safe_limit,),
-        ).fetchall()
-    return [
-        {
-            **dict(row),
-            "content": json.loads(row["content_json"]),
-            "evidence": json.loads(row["evidence_json"]),
-            "content_json": None,
-            "evidence_json": None,
-        }
-        for row in rows
-    ]
+def memory_shell_payload() -> dict[str, Any]:
+    return service_memory_shell_payload(
+        list_consolidation_buffer_fn=list_consolidation_buffer,
+        list_visual_evidence_fn=list_visual_evidence,
+        list_text_evidence_fn=list_text_evidence,
+        list_audio_evidence_fn=list_audio_evidence,
+        vision_status_payload_fn=vision_status_payload,
+        text_status_payload_fn=text_status_payload,
+        audio_status_payload_fn=audio_status_payload,
+    )
+
+
+def list_visual_evidence(limit: int = 100) -> list[dict[str, Any]]:
+    from .services.memory_evidence import list_visual_evidence as impl
+
+    return impl(limit)
+
+
+def list_text_evidence(limit: int = 100) -> list[dict[str, Any]]:
+    from .services.memory_evidence import list_text_evidence as impl
+
+    return impl(limit)
+
+
+def list_audio_evidence(limit: int = 100) -> list[dict[str, Any]]:
+    from .services.memory_evidence import list_audio_evidence as impl
+
+    return impl(limit)
+
+
+def list_consolidation_buffer(limit: int = 100) -> list[dict[str, Any]]:
+    from .services.memory_evidence import list_consolidation_buffer as impl
+
+    return impl(limit)
+
+
+def consolidation_buffer_payload() -> dict[str, Any]:
+    from .services.memory_evidence import consolidation_buffer_payload as impl
+
+    return impl()
+
+
+def create_visual_evidence_record(payload: dict[str, Any]) -> dict[str, Any]:
+    from .services.memory_evidence import create_visual_evidence_record as impl
+
+    return impl(payload)
+
+
+def create_text_evidence_record(payload: dict[str, Any]) -> dict[str, Any]:
+    from .services.memory_evidence import create_text_evidence_record as impl
+
+    return impl(payload)
+
+
+def create_audio_evidence_record(payload: dict[str, Any]) -> dict[str, Any]:
+    from .services.memory_evidence import create_audio_evidence_record as impl
+
+    return impl(payload)
+
+
+def vision_status_payload() -> dict[str, Any]:
+    from .services.memory_evidence import vision_status_payload as impl
+
+    return impl()
+
+
+def text_status_payload() -> dict[str, Any]:
+    from .services.memory_evidence import text_status_payload as impl
+
+    return impl()
+
+
+def audio_status_payload() -> dict[str, Any]:
+    from .services.memory_evidence import audio_status_payload as impl
+
+    return impl()
 
 
 def add_memory_item(kind: str, text: str) -> dict[str, Any]:
     if not memory_enabled():
         raise PermissionError("memory.write is disabled")
-
-    ensure_memory_db()
-    item = {
-        "id": str(uuid4()),
-        "kind": kind,
-        "text": text,
-        "created_at": datetime.now(timezone.utc).isoformat(),
-    }
-    with sqlite3.connect(db_path()) as db:
-        db.execute(
-            """
-            INSERT INTO memory_items (id, kind, text, created_at)
-            VALUES (:id, :kind, :text, :created_at)
-            """,
-            item,
-        )
-    return item
+    return service_add_memory_item(kind, text)
 
 
 def delete_memory_item(item_id: str) -> bool:
-    ensure_memory_db()
-    with sqlite3.connect(db_path()) as db:
-        cursor = db.execute("DELETE FROM memory_items WHERE id = ?", (item_id,))
-    return cursor.rowcount > 0
+    return service_delete_memory_item(item_id)
+
+
+__all__ = [
+    "ATTACHMENT_REF_CONTRACT",
+    "AUDIO_READER_STATUS",
+    "MEMORY_LAYER_CONTRACTS",
+    "MEMORY_MODALITY_CONTRACTS",
+    "TEXT_READER_STATUS",
+    "VISION_READER_STATUS",
+    "Path",
+    "add_memory_item",
+    "audio_status_payload",
+    "consolidation_buffer_payload",
+    "create_audio_evidence_record",
+    "create_text_evidence_record",
+    "create_visual_evidence_record",
+    "db_path",
+    "delete_memory_item",
+    "ensure_memory_db",
+    "list_audio_evidence",
+    "list_consolidation_buffer",
+    "list_memory_audit_log",
+    "list_memory_items",
+    "list_memory_records",
+    "list_memory_review_queue",
+    "list_text_evidence",
+    "list_visual_evidence",
+    "memory_contract_payload",
+    "memory_enabled",
+    "memory_shell_payload",
+    "memory_status_payload",
+    "now_iso",
+    "text_status_payload",
+    "vision_status_payload",
+]
